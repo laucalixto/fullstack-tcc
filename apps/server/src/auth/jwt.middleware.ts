@@ -1,0 +1,29 @@
+import type { Request, Response, NextFunction } from 'express';
+import { AuthService } from './AuthService';
+
+export interface AuthRequest extends Request {
+  facilitatorId?: string;
+}
+
+export function jwtMiddleware(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+): void {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing or malformed Authorization header' });
+    return;
+  }
+
+  const token = authHeader.slice(7);
+
+  try {
+    const payload = AuthService.verifyToken(token);
+    req.facilitatorId = payload.facilitatorId;
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
