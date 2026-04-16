@@ -22,7 +22,9 @@ describe('WebSocket sync — integração', () => {
   beforeEach(async () => {
     clients = [];
     httpServer = createServer();
-    attachSocketIO(httpServer, new SessionManager());
+    // rollDiceFn fixo em 3 garante que o jogador nunca caia em casa de quiz
+    // (QUIZ_TILE_INDICES = {5, 8, 15, 18, 25, 28, 35, 38}), evitando timeout por QUIZ_QUESTION
+    attachSocketIO(httpServer, new SessionManager({ rollDiceFn: () => 3 }));
     await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
     port = (httpServer.address() as AddressInfo).port;
   });
