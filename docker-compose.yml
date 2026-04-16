@@ -1,0 +1,46 @@
+version: '3.9'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: safety-board-mongo
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: safety_board
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ./apps/server
+      dockerfile: Dockerfile
+    container_name: safety-board-server
+    ports:
+      - '3001:3001'
+    environment:
+      - PORT=3001
+      - CLIENT_URL=http://localhost:5173
+      - MONGODB_URI=mongodb://mongodb:27017/safety_board
+      - NODE_ENV=production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ./apps/client
+      dockerfile: Dockerfile
+    container_name: safety-board-client
+    ports:
+      - '5173:80'
+    depends_on:
+      - server
+
+volumes:
+  mongo-data:

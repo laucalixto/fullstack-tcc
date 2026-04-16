@@ -1,0 +1,27 @@
+# ─── Documentos internos (não versionados) ───────────────────────────────────
+referencias/
+CLAUDE.md
+PLANO_DESENVOLVIMENTO.md
+
+# ─── Dependências ────────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# ─── Build ───────────────────────────────────────────────────────────────────
+dist/
+build/
+.turbo/
+
+# ─── Cobertura de testes ─────────────────────────────────────────────────────
+coverage/
+playwright-report/
+test-results/
+
+# ─── Ambiente ────────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ─── Editor / OS ─────────────────────────────────────────────────────────────
+.DS_Store
+*.log

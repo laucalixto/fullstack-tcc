@@ -1,0 +1,23 @@
+{
+  "name": "safety-board",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "test:e2e": "turbo run build --filter=@safety-board/shared && playwright test",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "coverage": "turbo run coverage"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.9"
+}
