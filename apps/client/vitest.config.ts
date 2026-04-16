@@ -16,6 +16,9 @@ export default defineConfig({
         'src/main.tsx',
         'src/vite-env.d.ts',
         'src/ws/socket.ts',
+        // Requer WebGL/contexto de renderização — coberto pelo E2E Playwright
+        'src/three/scene.ts',
+        'src/three/camera.ts',
         'src/__tests__/**',
       ],
       thresholds: {

@@ -3,7 +3,11 @@ import { act, render, screen } from '@testing-library/react';
 import App from '../App';
 import { socket } from '../ws/socket';
 
-// ─── Mock do socket para isolar o componente da rede ─────────────────────────
+// ─── Mocks ────────────────────────────────────────────────────────────────────
+vi.mock('../three/ThreeCanvas', () => ({
+  ThreeCanvas: () => <div data-testid="three-canvas" />,
+}));
+
 vi.mock('../ws/socket', () => ({
   socket: {
     connected: false,

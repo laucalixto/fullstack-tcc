@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { socket } from './ws/socket';
+import { ThreeCanvas } from './three/ThreeCanvas';
 
 type WsStatus = 'connecting...' | 'connected' | 'disconnected';
 
@@ -26,22 +27,21 @@ export default function App() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-background flex flex-col items-center justify-center gap-6 p-8">
-      <h1 className="font-headline text-4xl font-bold text-primary uppercase tracking-widest">
-        Safety Board
-      </h1>
+    <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
+      {/* Cena 3D — ocupa toda a tela */}
+      <ThreeCanvas />
 
-      <p className="font-body text-on-surface-variant text-sm">
-        Operação Conformidade 3D — Walking Skeleton
-      </p>
-
-      <div className="rounded-lg border border-outline-variant bg-surface-container px-6 py-4 text-center">
+      {/* HUD — WebSocket status sobreposto */}
+      <div
+        style={{ position: 'absolute', top: 16, right: 16 }}
+        className="rounded-lg border border-outline-variant bg-surface-container/80 px-4 py-2 text-center backdrop-blur-sm"
+      >
         <span className="font-label text-xs uppercase tracking-widest text-on-surface-variant">
-          WebSocket
+          WS
         </span>
         <p
           data-testid="ws-status"
-          className={`mt-1 text-lg font-semibold ${
+          className={`text-sm font-semibold ${
             wsStatus === 'connected'
               ? 'text-secondary'
               : wsStatus === 'disconnected'
@@ -52,6 +52,6 @@ export default function App() {
           {wsStatus}
         </p>
       </div>
-    </main>
+    </div>
   );
 }
