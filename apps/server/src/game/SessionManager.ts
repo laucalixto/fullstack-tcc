@@ -5,7 +5,7 @@ import { DiceService } from '../engine/DiceService';
 import { PINGenerator } from '../session/PINGenerator';
 import { QuizService, type ServedQuestion, type QuizCheckResult } from './QuizService';
 import { EVENTS, isQuizTile, getNormForTile } from '@safety-board/shared';
-import type { GameSession, Player, QuizConfig } from '@safety-board/shared';
+import type { GameSession, Player, QuizConfig, GameResultPayload, GameResultPlayer } from '@safety-board/shared';
 
 const MAX_PLAYERS = 4;
 
@@ -18,6 +18,7 @@ interface PendingQuiz {
   playerId: string;
   questionId: string;
   nextPlayerId: string; // guardado para emitir TURN_CHANGED após resposta
+  servedAt: number;     // Date.now() ao servir — base para cálculo de score
 }
 
 interface SessionEntry {
@@ -26,11 +27,15 @@ interface SessionEntry {
   turnManager: TurnManager | null;
   usedQuestionIds: Set<string>;
   pendingQuiz: PendingQuiz | null;
+  startedAt: number | null;
+  correctAnswersByPlayer: Map<string, number>;
+  totalAnswersByPlayer: Map<string, number>;
 }
 
 interface SessionManagerConfig {
   rollDiceFn?: () => number;
   quizService?: QuizService;
+  nowFn?: () => number;  // injetável para testes determinísticos
 }
 
 export class SessionManager {
@@ -38,14 +43,17 @@ export class SessionManager {
   private readonly pinToId = new Map<string, string>();
   private readonly rollDiceFn: () => number;
   private readonly quizService: QuizService;
+  private readonly nowFn: () => number;
 
   constructor(rollDiceFnOrConfig: (() => number) | SessionManagerConfig = {}) {
     if (typeof rollDiceFnOrConfig === 'function') {
       this.rollDiceFn = rollDiceFnOrConfig;
       this.quizService = new QuizService();
+      this.nowFn = Date.now;
     } else {
       this.rollDiceFn = rollDiceFnOrConfig.rollDiceFn ?? DiceService.roll;
       this.quizService = rollDiceFnOrConfig.quizService ?? new QuizService();
+      this.nowFn = rollDiceFnOrConfig.nowFn ?? Date.now;
     }
   }
 
@@ -74,6 +82,9 @@ export class SessionManager {
       turnManager: null,
       usedQuestionIds: new Set(),
       pendingQuiz: null,
+      startedAt: null,
+      correctAnswersByPlayer: new Map(),
+      totalAnswersByPlayer: new Map(),
     });
     this.pinToId.set(pin, id);
     return session;
@@ -121,6 +132,7 @@ export class SessionManager {
 
     fsm.dispatch(EVENTS.GAME_START);
     session.state = fsm.state;
+    entry.startedAt = Date.now();
     tm.start();
     return session;
   }
@@ -153,7 +165,7 @@ export class SessionManager {
         const question = this.quizService.getRandomQuestion(normId, entry.usedQuestionIds);
         const served = this.quizService.serveQuestion(question.id);
         if (served) {
-          entry.pendingQuiz = { playerId, questionId: question.id, nextPlayerId };
+          entry.pendingQuiz = { playerId, questionId: question.id, nextPlayerId, servedAt: this.nowFn() };
           return { dice, newPosition: player.position, nextPlayerId, quiz: served };
         }
       } catch {
@@ -169,6 +181,7 @@ export class SessionManager {
     playerId: string,
     questionId: string,
     selectedText: string,
+    latencyMs: number = 0,
   ): { result: QuizCheckResult; nextPlayerId: string } {
     const entry = this.sessions.get(sessionId);
     if (!entry) throw new Error('SESSION_NOT_FOUND');
@@ -181,12 +194,58 @@ export class SessionManager {
     entry.usedQuestionIds.add(questionId);
     entry.pendingQuiz = null;
 
+    const prev = entry.totalAnswersByPlayer.get(playerId) ?? 0;
+    entry.totalAnswersByPlayer.set(playerId, prev + 1);
+
     const result = this.quizService.checkAnswer(questionId, selectedText);
+    const points = this._calcPoints(pendingQuiz.servedAt, latencyMs, entry.session.quizConfig.timeoutSeconds);
+
+    const player = entry.session.players.find((p) => p.id === playerId);
+    if (player) {
+      player.score += result.correct ? points : -points;
+    }
+
     if (result.correct) {
-      const player = entry.session.players.find((p) => p.id === playerId);
-      if (player) player.score += 1;
+      const prevCorrect = entry.correctAnswersByPlayer.get(playerId) ?? 0;
+      entry.correctAnswersByPlayer.set(playerId, prevCorrect + 1);
     }
 
     return { result, nextPlayerId: pendingQuiz.nextPlayerId };
+  }
+
+  private _calcPoints(servedAt: number, latencyMs: number, timeoutSeconds: number): number {
+    const timeoutMs = timeoutSeconds * 1000;
+    const elapsed = this.nowFn() - servedAt;
+    const oneWayMs = latencyMs / 2;
+    const adjusted = Math.max(elapsed - oneWayMs, 0);
+    const timeLeftMs = Math.max(timeoutMs - adjusted, 0);
+    return Math.round((timeLeftMs / timeoutMs) * 100);
+  }
+
+  finishGame(sessionId: string): GameResultPayload {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) throw new Error('SESSION_NOT_FOUND');
+
+    const { session, fsm } = entry;
+    fsm.dispatch(EVENTS.GAME_FINISHED);
+    session.state = fsm.state;
+
+    const durationSeconds = entry.startedAt
+      ? Math.round((Date.now() - entry.startedAt) / 1000)
+      : 0;
+
+    const sorted = [...session.players].sort((a, b) => b.score - a.score);
+
+    const players: GameResultPlayer[] = sorted.map((p, i) => ({
+      playerId: p.id,
+      name: p.name,
+      score: p.score,
+      rank: (i + 1) as 1 | 2 | 3 | 4,
+      finalPosition: p.position,
+      correctAnswers: entry.correctAnswersByPlayer.get(p.id) ?? 0,
+      totalAnswers: entry.totalAnswersByPlayer.get(p.id) ?? 0,
+    }));
+
+    return { sessionId, players, durationSeconds };
   }
 }

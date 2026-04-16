@@ -3,6 +3,7 @@ import {
   EVENTS,
   type RoomErrorPayload,
   type QuizAnswerPayload,
+  type GameFinishedPayload,
 } from '@safety-board/shared';
 import { SessionManager } from '../game/SessionManager';
 
@@ -35,6 +36,18 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
       const session = sm.getById(payload.sessionId);
       if (session) io.to(payload.sessionId).emit(EVENTS.GAME_STATE, session);
 
+      // Jogador chegou ao tile final — encerra a partida
+      if (result.newPosition >= 39) {
+        try {
+          const gameResult = sm.finishGame(payload.sessionId);
+          const finished: GameFinishedPayload = gameResult;
+          io.to(payload.sessionId).emit(EVENTS.GAME_FINISHED, finished);
+        } catch {
+          // sessão já encerrada ou erro inesperado — não bloqueia o fluxo
+        }
+        return;
+      }
+
       if (result.quiz) {
         // Casa de quiz — emite pergunta e adia TURN_CHANGED até resposta
         io.to(payload.sessionId).emit(EVENTS.QUIZ_QUESTION, {
@@ -56,11 +69,13 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
 
   socket.on(EVENTS.QUIZ_ANSWER, (payload: QuizAnswerPayload) => {
     try {
+      const latencyMs: number = socket.data.latencyMs ?? 0;
       const { result, nextPlayerId } = sm.submitAnswer(
         payload.sessionId,
         payload.playerId,
         payload.questionId,
         payload.selectedText,
+        latencyMs,
       );
 
       io.to(payload.sessionId).emit(EVENTS.QUIZ_RESULT, {

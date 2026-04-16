@@ -212,30 +212,99 @@ describe('SessionManager — quiz', () => {
     expect(typeof nextPlayerId).toBe('string');
   });
 
-  it('submitAnswer incorreto não incrementa score', () => {
-    const sm = makeQuizSm(5);
+  it('submitAnswer incorreto desconta pontos do jogador (anti-chute)', () => {
+    let fakeNow = 0;
+    const sm = new SessionManager({
+      rollDiceFn: () => 5,
+      quizService: new QuizService({ randomFn: () => 0 }),
+      nowFn: () => fakeNow,
+    });
     const { id, playerId } = setupActiveGame(sm);
-    const roll = sm.rollDice(id, playerId);
+    fakeNow = 1000;
+    const roll = sm.rollDice(id, playerId);  // servedAt = 1000
 
+    fakeNow = 6000; // 5s elapsed → timeLeftMs = 25000/30000 → ~83 pts
     const q = sm['quizService'].getQuestion(roll.quiz!.id)!;
     const wrongText = q.options.find((_, i) => i !== q.correctIndex)!;
 
-    sm.submitAnswer(id, playerId, roll.quiz!.id, wrongText);
+    sm.submitAnswer(id, playerId, roll.quiz!.id, wrongText, 0);
     const session = sm.getById(id)!;
-    expect(session.players[0].score).toBe(0);
+    expect(session.players[0].score).toBeLessThan(0); // penalidade aplicada
   });
 
-  it('submitAnswer correto incrementa score do jogador', () => {
-    const sm = makeQuizSm(5);
+  it('submitAnswer correto incrementa score entre 0 e 100', () => {
+    let fakeNow = 0;
+    const sm = new SessionManager({
+      rollDiceFn: () => 5,
+      quizService: new QuizService({ randomFn: () => 0 }),
+      nowFn: () => fakeNow,
+    });
     const { id, playerId } = setupActiveGame(sm);
+    fakeNow = 1000;
     const roll = sm.rollDice(id, playerId);
 
+    fakeNow = 11000; // 10s elapsed, latencyMs=0 → timeLeftMs=20000/30000 → 67 pts
     const q = sm['quizService'].getQuestion(roll.quiz!.id)!;
     const correctText = q.options[q.correctIndex];
 
-    sm.submitAnswer(id, playerId, roll.quiz!.id, correctText);
+    sm.submitAnswer(id, playerId, roll.quiz!.id, correctText, 0);
     const session = sm.getById(id)!;
-    expect(session.players[0].score).toBe(1);
+    expect(session.players[0].score).toBe(67);
+  });
+
+  it('submitAnswer correto respondido imediatamente vale 100 pontos', () => {
+    let fakeNow = 0;
+    const sm = new SessionManager({
+      rollDiceFn: () => 5,
+      quizService: new QuizService({ randomFn: () => 0 }),
+      nowFn: () => fakeNow,
+    });
+    const { id, playerId } = setupActiveGame(sm);
+    const roll = sm.rollDice(id, playerId); // servedAt = 0
+
+    // fakeNow permanece 0 → elapsed=0, timeLeftMs=30000 → 100 pts
+    const q = sm['quizService'].getQuestion(roll.quiz!.id)!;
+    sm.submitAnswer(id, playerId, roll.quiz!.id, q.options[q.correctIndex], 0);
+    const session = sm.getById(id)!;
+    expect(session.players[0].score).toBe(100);
+  });
+
+  it('submitAnswer compensa latência RTT ao calcular pontos', () => {
+    let fakeNow = 0;
+    const sm = new SessionManager({
+      rollDiceFn: () => 5,
+      quizService: new QuizService({ randomFn: () => 0 }),
+      nowFn: () => fakeNow,
+    });
+    const { id, playerId } = setupActiveGame(sm);
+    fakeNow = 1000;
+    const roll = sm.rollDice(id, playerId);
+
+    // elapsed=10s, latencyMs=2000 (RTT=2s, oneWay=1s) → adjusted=9000ms
+    // timeLeftMs=21000/30000 → round(70) = 70 pts
+    fakeNow = 11000;
+    const q = sm['quizService'].getQuestion(roll.quiz!.id)!;
+    sm.submitAnswer(id, playerId, roll.quiz!.id, q.options[q.correctIndex], 2000);
+    const session = sm.getById(id)!;
+    expect(session.players[0].score).toBe(70);
+  });
+
+  it('submitAnswer com timeout esgotado retorna 0 pontos (acerto tardio)', () => {
+    let fakeNow = 0;
+    const sm = new SessionManager({
+      rollDiceFn: () => 5,
+      quizService: new QuizService({ randomFn: () => 0 }),
+      nowFn: () => fakeNow,
+    });
+    const { id, playerId } = setupActiveGame(sm);
+    fakeNow = 1000;
+    const roll = sm.rollDice(id, playerId); // servedAt = 1000
+
+    fakeNow = 31000; // 30s elapsed = timeout exatamente esgotado, latencyMs=0
+    const q = sm['quizService'].getQuestion(roll.quiz!.id)!;
+    sm.submitAnswer(id, playerId, roll.quiz!.id, q.options[q.correctIndex], 0);
+    const session = sm.getById(id)!;
+    expect(session.players[0].score).toBe(0);
   });
 
   it('submitAnswer lança NO_PENDING_QUIZ se não há quiz ativo', () => {
@@ -248,5 +317,94 @@ describe('SessionManager — quiz', () => {
   it('submitAnswer lança SESSION_NOT_FOUND para sessão inválida', () => {
     const sm = makeQuizSm(5);
     expect(() => sm.submitAnswer('bad', 'p1', 'q1', 'texto')).toThrow('SESSION_NOT_FOUND');
+  });
+});
+
+// ─── RED: falha até finishGame ser implementado ───────────────────────────────
+
+describe('SessionManager — finishGame', () => {
+  function setupFinishableGame() {
+    const sm = new SessionManager({ rollDiceFn: () => 3 });
+    const { pin, id } = sm.createSession('fac-1');
+    const { playerId: p1 } = sm.joinSession(pin, 'Alice');
+    const { playerId: p2 } = sm.joinSession(pin, 'Bob');
+    sm.startGame(id);
+    return { sm, id, p1, p2 };
+  }
+
+  it('finishGame transiciona sessão para estado FINISHED', () => {
+    const { sm, id } = setupFinishableGame();
+    sm.finishGame(id);
+    expect(sm.getById(id)!.state).toBe('FINISHED');
+  });
+
+  it('finishGame retorna GameResultPayload com todos os jogadores', () => {
+    const { sm, id } = setupFinishableGame();
+    const result = sm.finishGame(id);
+    expect(result.players).toHaveLength(2);
+    expect(result.sessionId).toBe(id);
+  });
+
+  it('finishGame ordena jogadores por score decrescente', () => {
+    const sm = new SessionManager({ rollDiceFn: () => 3 });
+    const { pin, id } = sm.createSession('fac-1');
+    sm.joinSession(pin, 'Alice');
+    sm.joinSession(pin, 'Bob');
+    sm.startGame(id);
+
+    // Manipula scores diretamente para teste determinístico
+    const session = sm.getById(id)!;
+    session.players[0].score = 5; // Alice
+    session.players[1].score = 8; // Bob
+
+    const result = sm.finishGame(id);
+    expect(result.players[0].name).toBe('Bob');
+    expect(result.players[0].rank).toBe(1);
+    expect(result.players[1].name).toBe('Alice');
+    expect(result.players[1].rank).toBe(2);
+  });
+
+  it('finishGame atribui rank 1 ao jogador com maior score', () => {
+    const { sm, id, p1 } = setupFinishableGame();
+    const session = sm.getById(id)!;
+    const p1Player = session.players.find((p) => p.id === p1)!;
+    p1Player.score = 10;
+
+    const result = sm.finishGame(id);
+    const winner = result.players.find((p) => p.playerId === p1)!;
+    expect(winner.rank).toBe(1);
+  });
+
+  it('finishGame inclui finalPosition de cada jogador', () => {
+    const sm = new SessionManager({ rollDiceFn: () => 3 });
+    const { pin, id } = sm.createSession('fac-1');
+    sm.joinSession(pin, 'Alice');
+    sm.joinSession(pin, 'Bob');
+    sm.startGame(id);
+
+    const session = sm.getById(id)!;
+    session.players[0].position = 12;
+    session.players[1].position = 7;
+
+    const result = sm.finishGame(id);
+    const alice = result.players.find((p) => p.name === 'Alice')!;
+    expect(alice.finalPosition).toBe(12);
+  });
+
+  it('finishGame inclui durationSeconds positivo', () => {
+    const { sm, id } = setupFinishableGame();
+    const result = sm.finishGame(id);
+    expect(result.durationSeconds).toBeGreaterThanOrEqual(0);
+  });
+
+  it('finishGame lança SESSION_NOT_FOUND para id inválido', () => {
+    const sm = new SessionManager();
+    expect(() => sm.finishGame('bad-id')).toThrow('SESSION_NOT_FOUND');
+  });
+
+  it('finishGame lança erro se jogo não estiver ACTIVE', () => {
+    const sm = new SessionManager();
+    const { id } = sm.createSession('fac-1');
+    expect(() => sm.finishGame(id)).toThrow();
   });
 });

@@ -37,3 +37,19 @@ export interface GameSession {
   createdAt: number;
   quizConfig: QuizConfig;
 }
+
+export interface GameResultPlayer {
+  playerId: PlayerId;
+  name: string;
+  score: number;
+  rank: 1 | 2 | 3 | 4;         // calculado pelo server
+  finalPosition: number;         // casa final no tabuleiro
+  correctAnswers: number;
+  totalAnswers: number;
+}
+
+export interface GameResultPayload {
+  sessionId: SessionId;
+  players: GameResultPlayer[];   // ordenados por rank (1º primeiro)
+  durationSeconds: number;       // tempo da partida
+}

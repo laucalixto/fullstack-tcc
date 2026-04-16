@@ -86,3 +86,9 @@ export interface QuizResultPayload {
   correct: boolean;
   correctText: string;
 }
+
+export interface GameFinishedPayload {
+  sessionId: string;
+  players: import('./types').GameResultPlayer[];  // ordenados por rank
+  durationSeconds: number;
+}
