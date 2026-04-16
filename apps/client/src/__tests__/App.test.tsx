@@ -13,9 +13,10 @@ vi.mock('../ws/socket', () => ({
   },
 }));
 
-// ─── RED: falha até App.tsx ser implementado ──────────────────────────────────
-
 describe('App', () => {
+  const onMock = () => (socket.on as ReturnType<typeof vi.fn>).mock.calls;
+  const offMock = () => (socket.off as ReturnType<typeof vi.fn>).mock.calls;
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -32,9 +33,7 @@ describe('App', () => {
 
   it('registra listeners connect e disconnect ao montar', () => {
     render(<App />);
-    const registeredEvents = (socket.on as ReturnType<typeof vi.fn>).mock.calls.map(
-      ([event]: [string]) => event,
-    );
+    const registeredEvents = onMock().map((call) => call[0] as string);
     expect(registeredEvents).toContain('connect');
     expect(registeredEvents).toContain('disconnect');
   });
@@ -42,18 +41,14 @@ describe('App', () => {
   it('remove listeners ao desmontar', () => {
     const { unmount } = render(<App />);
     unmount();
-    const removedEvents = (socket.off as ReturnType<typeof vi.fn>).mock.calls.map(
-      ([event]: [string]) => event,
-    );
+    const removedEvents = offMock().map((call) => call[0] as string);
     expect(removedEvents).toContain('connect');
     expect(removedEvents).toContain('disconnect');
   });
 
   it('exibe "connected" ao receber evento connect', () => {
     render(<App />);
-    const connectCb = (socket.on as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([e]: [string]) => e === 'connect',
-    )?.[1] as () => void;
+    const connectCb = onMock().find((call) => call[0] === 'connect')?.[1] as () => void;
 
     act(() => { connectCb(); });
 
@@ -62,9 +57,7 @@ describe('App', () => {
 
   it('exibe "disconnected" ao receber evento disconnect', () => {
     render(<App />);
-    const disconnectCb = (socket.on as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([e]: [string]) => e === 'disconnect',
-    )?.[1] as () => void;
+    const disconnectCb = onMock().find((call) => call[0] === 'disconnect')?.[1] as () => void;
 
     act(() => { disconnectCb(); });
 
