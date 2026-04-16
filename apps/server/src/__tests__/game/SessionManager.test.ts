@@ -166,6 +166,35 @@ describe('SessionManager', () => {
     expect(session.quizConfig.activeNormIds).toEqual(['NR-06', 'NR-35']);
     expect(session.quizConfig.timeoutSeconds).toBe(45);
   });
+
+  // ─── RED: falha até session.name e session.shareLink serem implementados ─────
+
+  it('createSession armazena o nome da sessão fornecido pelo facilitador', () => {
+    const sm = new SessionManager();
+    const session = sm.createSession('fac-1', undefined, 'Treinamento NR-35');
+    expect(session.name).toBe('Treinamento NR-35');
+  });
+
+  it('createSession usa nome padrão quando não fornecido', () => {
+    const sm = new SessionManager();
+    const session = sm.createSession('fac-1');
+    expect(typeof session.name).toBe('string');
+    expect(session.name.length).toBeGreaterThan(0);
+  });
+
+  it('createSession gera shareLink contendo o PIN', () => {
+    const sm = new SessionManager();
+    const session = sm.createSession('fac-1', undefined, 'Manutenção');
+    expect(typeof session.shareLink).toBe('string');
+    expect(session.shareLink).toContain(session.pin);
+  });
+
+  it('duas sessões têm shareLinks diferentes', () => {
+    const sm = new SessionManager();
+    const s1 = sm.createSession('fac-1', undefined, 'Sessão A');
+    const s2 = sm.createSession('fac-2', undefined, 'Sessão B');
+    expect(s1.shareLink).not.toBe(s2.shareLink);
+  });
 });
 
 describe('SessionManager — quiz', () => {

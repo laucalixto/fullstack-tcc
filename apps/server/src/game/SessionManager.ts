@@ -57,14 +57,18 @@ export class SessionManager {
     }
   }
 
-  createSession(facilitatorId: string, quizConfig?: Partial<QuizConfig>): GameSession {
+  createSession(facilitatorId: string, quizConfig?: Partial<QuizConfig>, name?: string): GameSession {
     const existingPins = new Set(this.pinToId.keys());
     const pin = PINGenerator.generate(existingPins);
     const id = randomUUID();
+    const sessionName = name ?? 'Sessão Safety Board';
+    const shareLink = `/sala/${pin}`;
 
     const session: GameSession = {
       id,
       pin,
+      name: sessionName,
+      shareLink,
       facilitatorId,
       state: 'WAITING',
       players: [],

@@ -1,25 +1,30 @@
 import { useState } from 'react';
-
-const AVATAR_COLORS = ['#e63946', '#457b9d', '#2a9d8f', '#f4a261'] as const;
+import { AVATARS } from '@safety-board/shared';
+import type { AvatarOption } from '@safety-board/shared';
 
 interface CharacterSelectProps {
-  onConfirm: (firstName: string, lastName: string, colorIndex: number) => void;
-  takenColors?: number[];
+  onConfirm: (firstName: string, lastName: string, avatarId: string) => void;
+  avatars?: AvatarOption[];
+  takenAvatarIds?: string[];
 }
 
-export function CharacterSelect({ onConfirm, takenColors = [] }: CharacterSelectProps) {
+export function CharacterSelect({
+  onConfirm,
+  avatars = AVATARS,
+  takenAvatarIds = [],
+}: CharacterSelectProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [selectedColor, setSelectedColor] = useState<number | null>(null);
+  const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(null);
 
   const canConfirm =
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
-    selectedColor !== null;
+    selectedAvatarId !== null;
 
   function handleConfirm(e: React.FormEvent) {
     e.preventDefault();
-    if (canConfirm) onConfirm(firstName.trim(), lastName.trim(), selectedColor!);
+    if (canConfirm) onConfirm(firstName.trim(), lastName.trim(), selectedAvatarId!);
   }
 
   return (
@@ -40,17 +45,17 @@ export function CharacterSelect({ onConfirm, takenColors = [] }: CharacterSelect
       />
 
       <div>
-        {AVATAR_COLORS.map((color, i) => {
-          const isTaken = takenColors.includes(i);
+        {avatars.map((avatar, i) => {
+          const isTaken = takenAvatarIds.includes(avatar.id);
           return (
             <button
-              key={i}
+              key={avatar.id}
               type="button"
               data-testid={`avatar-option-${i}`}
               disabled={isTaken}
-              aria-pressed={selectedColor === i ? 'true' : 'false'}
-              onClick={() => !isTaken && setSelectedColor(i)}
-              style={{ backgroundColor: color }}
+              aria-pressed={selectedAvatarId === avatar.id ? 'true' : 'false'}
+              onClick={() => !isTaken && setSelectedAvatarId(avatar.id)}
+              style={{ backgroundColor: avatar.color }}
             />
           );
         })}
