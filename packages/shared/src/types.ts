@@ -81,6 +81,27 @@ export interface GameSession {
   quizConfig: QuizConfig;
 }
 
+// ─── Registro de jogador pós-partida ─────────────────────────────────────────
+
+export interface PlayerSignupData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  industrialUnit: string;
+  password: string;
+}
+
+// ─── Leaderboard global ───────────────────────────────────────────────────────
+
+export interface LeaderboardEntry {
+  rank: number;
+  playerId: string;
+  name: string;
+  role?: string;           // ex: "Especialista em Logística"
+  industrialUnit: string;  // ex: "Unidade Sul - Curitiba"
+  totalScore: number;
+}
+
 export interface GameResultPlayer {
   playerId: PlayerId;
   name: string;
