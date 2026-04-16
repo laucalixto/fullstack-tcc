@@ -1,0 +1,32 @@
+import { create } from 'zustand';
+import type { GameSession, Player } from '@safety-board/shared';
+
+interface GameStore {
+  session: GameSession | null;
+  myPlayerId: string | null;
+  currentPlayer: Player | null;
+  isMyTurn: boolean;
+  setSession: (session: GameSession) => void;
+  setMyPlayerId: (id: string) => void;
+}
+
+export const useGameStore = create<GameStore>()((set, get) => ({
+  session: null,
+  myPlayerId: null,
+  currentPlayer: null,
+  isMyTurn: false,
+
+  setSession: (session) => {
+    const myPlayerId = get().myPlayerId;
+    const currentPlayer = session.players[session.currentPlayerIndex] ?? null;
+    const isMyTurn = myPlayerId !== null && currentPlayer?.id === myPlayerId;
+    set({ session, currentPlayer, isMyTurn });
+  },
+
+  setMyPlayerId: (id) => {
+    const { session } = get();
+    const currentPlayer = session?.players[session.currentPlayerIndex] ?? null;
+    const isMyTurn = currentPlayer?.id === id;
+    set({ myPlayerId: id, isMyTurn });
+  },
+}));

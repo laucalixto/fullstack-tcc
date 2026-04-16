@@ -53,6 +53,6 @@ export interface RoomJoinedPayload {
 }
 
 export interface RoomErrorPayload {
-  code: 'ROOM_NOT_FOUND' | 'ROOM_FULL' | 'GAME_ALREADY_STARTED';
+  code: 'ROOM_NOT_FOUND' | 'ROOM_FULL' | 'GAME_ALREADY_STARTED' | 'NOT_YOUR_TURN';
   message: string;
 }
