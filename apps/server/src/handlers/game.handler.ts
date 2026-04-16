@@ -1,5 +1,9 @@
 import type { Socket, Server } from 'socket.io';
-import { EVENTS, type RoomErrorPayload } from '@safety-board/shared';
+import {
+  EVENTS,
+  type RoomErrorPayload,
+  type QuizAnswerPayload,
+} from '@safety-board/shared';
 import { SessionManager } from '../game/SessionManager';
 
 export function registerGameHandler(socket: Socket, io: Server, sm: SessionManager): void {
@@ -27,18 +31,54 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
         dice: result.dice,
         newPosition: result.newPosition,
       });
-      io.to(payload.sessionId).emit(EVENTS.TURN_CHANGED, { playerId: result.nextPlayerId });
 
       const session = sm.getById(payload.sessionId);
-      if (session) {
-        io.to(payload.sessionId).emit(EVENTS.GAME_STATE, session);
+      if (session) io.to(payload.sessionId).emit(EVENTS.GAME_STATE, session);
+
+      if (result.quiz) {
+        // Casa de quiz — emite pergunta e adia TURN_CHANGED até resposta
+        io.to(payload.sessionId).emit(EVENTS.QUIZ_QUESTION, {
+          sessionId: payload.sessionId,
+          playerId: payload.playerId,
+          question: result.quiz,
+          timeoutSeconds: session?.quizConfig.timeoutSeconds ?? 30,
+        });
+      } else {
+        io.to(payload.sessionId).emit(EVENTS.TURN_CHANGED, { playerId: result.nextPlayerId });
       }
     } catch (e) {
       const msg = (e as Error).message;
       const code: RoomErrorPayload['code'] =
         msg === 'NOT_YOUR_TURN' ? 'NOT_YOUR_TURN' : 'ROOM_NOT_FOUND';
-      const error: RoomErrorPayload = { code, message: msg };
-      socket.emit(EVENTS.ROOM_ERROR, error);
+      socket.emit(EVENTS.ROOM_ERROR, { code, message: msg } satisfies RoomErrorPayload);
+    }
+  });
+
+  socket.on(EVENTS.QUIZ_ANSWER, (payload: QuizAnswerPayload) => {
+    try {
+      const { result, nextPlayerId } = sm.submitAnswer(
+        payload.sessionId,
+        payload.playerId,
+        payload.questionId,
+        payload.selectedText,
+      );
+
+      io.to(payload.sessionId).emit(EVENTS.QUIZ_RESULT, {
+        sessionId: payload.sessionId,
+        playerId: payload.playerId,
+        correct: result.correct,
+        correctText: result.correctText,
+      });
+
+      const session = sm.getById(payload.sessionId);
+      if (session) io.to(payload.sessionId).emit(EVENTS.GAME_STATE, session);
+
+      io.to(payload.sessionId).emit(EVENTS.TURN_CHANGED, { playerId: nextPlayerId });
+    } catch (e) {
+      const msg = (e as Error).message;
+      const code: RoomErrorPayload['code'] =
+        msg === 'NOT_YOUR_TURN' ? 'NOT_YOUR_TURN' : 'ROOM_NOT_FOUND';
+      socket.emit(EVENTS.ROOM_ERROR, { code, message: msg } satisfies RoomErrorPayload);
     }
   });
 }

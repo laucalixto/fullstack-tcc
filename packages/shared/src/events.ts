@@ -39,6 +39,10 @@ export interface PongPayload {
 
 export interface RoomCreatePayload {
   facilitatorId: string;
+  quizConfig?: {
+    activeNormIds: string[];
+    timeoutSeconds?: number;
+  };
 }
 
 export interface RoomJoinPayload {
@@ -55,4 +59,30 @@ export interface RoomJoinedPayload {
 export interface RoomErrorPayload {
   code: 'ROOM_NOT_FOUND' | 'ROOM_FULL' | 'GAME_ALREADY_STARTED' | 'NOT_YOUR_TURN';
   message: string;
+}
+
+export interface QuizQuestionPayload {
+  sessionId: string;
+  playerId: string;        // jogador que deve responder
+  question: {
+    id: string;
+    normId: string;
+    text: string;
+    options: string[];     // embaralhadas
+  };
+  timeoutSeconds: number;
+}
+
+export interface QuizAnswerPayload {
+  sessionId: string;
+  playerId: string;
+  questionId: string;
+  selectedText: string;
+}
+
+export interface QuizResultPayload {
+  sessionId: string;
+  playerId: string;
+  correct: boolean;
+  correctText: string;
 }

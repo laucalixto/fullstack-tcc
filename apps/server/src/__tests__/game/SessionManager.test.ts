@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SessionManager } from '../../game/SessionManager';
+import { QuizService } from '../../game/QuizService';
 
 // ─── RED: falha até SessionManager.ts ser implementado ───────────────────────
 
@@ -147,5 +148,105 @@ describe('SessionManager', () => {
     const s1 = sm.createSession('fac-1');
     const s2 = sm.createSession('fac-2');
     expect(s1.pin).not.toBe(s2.pin);
+  });
+
+  it('createSession inclui quizConfig com normas padrão', () => {
+    const sm = new SessionManager();
+    const session = sm.createSession('fac-1');
+    expect(session.quizConfig.activeNormIds).toHaveLength(4);
+    expect(session.quizConfig.timeoutSeconds).toBe(30);
+  });
+
+  it('createSession aceita quizConfig customizado', () => {
+    const sm = new SessionManager();
+    const session = sm.createSession('fac-1', {
+      activeNormIds: ['NR-06', 'NR-35'],
+      timeoutSeconds: 45,
+    });
+    expect(session.quizConfig.activeNormIds).toEqual(['NR-06', 'NR-35']);
+    expect(session.quizConfig.timeoutSeconds).toBe(45);
+  });
+});
+
+describe('SessionManager — quiz', () => {
+  // Questão cujo tile 5 é quiz tile (NR-06 no grupo 0-9)
+  function makeQuizSm(rollResult = 5) {
+    const quizService = new QuizService({ randomFn: () => 0 }); // sempre 1ª questão
+    return new SessionManager({ rollDiceFn: () => rollResult, quizService });
+  }
+
+  function setupActiveGame(sm: SessionManager) {
+    const { pin, id } = sm.createSession('fac-1');
+    const { playerId } = sm.joinSession(pin, 'P1');
+    sm.joinSession(pin, 'P2');
+    sm.startGame(id);
+    return { id, playerId };
+  }
+
+  it('rollDice numa casa de quiz retorna quiz com question', () => {
+    const sm = makeQuizSm(5); // tile 5 é quiz tile
+    const { id, playerId } = setupActiveGame(sm);
+    const result = sm.rollDice(id, playerId);
+    expect(result.quiz).toBeDefined();
+    expect(result.quiz!.options).toHaveLength(4);
+    expect(result.quiz).not.toHaveProperty('correctIndex');
+  });
+
+  it('rollDice em casa normal não retorna quiz', () => {
+    const sm = makeQuizSm(3); // tile 3 não é quiz tile
+    const { id, playerId } = setupActiveGame(sm);
+    const result = sm.rollDice(id, playerId);
+    expect(result.quiz).toBeUndefined();
+  });
+
+  it('submitAnswer retorna resultado correto e nextPlayerId', () => {
+    const sm = makeQuizSm(5);
+    const { id, playerId } = setupActiveGame(sm);
+    const roll = sm.rollDice(id, playerId);
+
+    const correctText = sm['quizService'].getQuestion(roll.quiz!.id)!
+      .options[sm['quizService'].getQuestion(roll.quiz!.id)!.correctIndex];
+
+    const { result, nextPlayerId } = sm.submitAnswer(id, playerId, roll.quiz!.id, correctText);
+    expect(result.correct).toBe(true);
+    expect(typeof nextPlayerId).toBe('string');
+  });
+
+  it('submitAnswer incorreto não incrementa score', () => {
+    const sm = makeQuizSm(5);
+    const { id, playerId } = setupActiveGame(sm);
+    const roll = sm.rollDice(id, playerId);
+
+    const q = sm['quizService'].getQuestion(roll.quiz!.id)!;
+    const wrongText = q.options.find((_, i) => i !== q.correctIndex)!;
+
+    sm.submitAnswer(id, playerId, roll.quiz!.id, wrongText);
+    const session = sm.getById(id)!;
+    expect(session.players[0].score).toBe(0);
+  });
+
+  it('submitAnswer correto incrementa score do jogador', () => {
+    const sm = makeQuizSm(5);
+    const { id, playerId } = setupActiveGame(sm);
+    const roll = sm.rollDice(id, playerId);
+
+    const q = sm['quizService'].getQuestion(roll.quiz!.id)!;
+    const correctText = q.options[q.correctIndex];
+
+    sm.submitAnswer(id, playerId, roll.quiz!.id, correctText);
+    const session = sm.getById(id)!;
+    expect(session.players[0].score).toBe(1);
+  });
+
+  it('submitAnswer lança NO_PENDING_QUIZ se não há quiz ativo', () => {
+    const sm = makeQuizSm(3); // tile 3 — sem quiz
+    const { id, playerId } = setupActiveGame(sm);
+    sm.rollDice(id, playerId);
+    expect(() => sm.submitAnswer(id, playerId, 'q1', 'texto')).toThrow('NO_PENDING_QUIZ');
+  });
+
+  it('submitAnswer lança SESSION_NOT_FOUND para sessão inválida', () => {
+    const sm = makeQuizSm(5);
+    expect(() => sm.submitAnswer('bad', 'p1', 'q1', 'texto')).toThrow('SESSION_NOT_FOUND');
   });
 });

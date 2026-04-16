@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BOARD_PATH, getTileByIndex, isFinishTile, isStartTile } from '../board';
+import { BOARD_PATH, getTileByIndex, isFinishTile, isStartTile, isQuizTile, getNormForTile, QUIZ_TILE_INDICES } from '../board';
 
 // ─── RED: falha até board.ts ser implementado ─────────────────────────────────
 
@@ -82,5 +82,57 @@ describe('isStartTile / isFinishTile', () => {
   it('isFinishTile retorna false para qualquer outro índice', () => {
     expect(isFinishTile(0)).toBe(false);
     expect(isFinishTile(38)).toBe(false);
+  });
+});
+
+describe('isQuizTile', () => {
+  it('retorna true para todas as casas de quiz definidas', () => {
+    for (const idx of QUIZ_TILE_INDICES) {
+      expect(isQuizTile(idx)).toBe(true);
+    }
+  });
+
+  it('retorna false para casas que não são de quiz', () => {
+    expect(isQuizTile(0)).toBe(false);  // start
+    expect(isQuizTile(3)).toBe(false);
+    expect(isQuizTile(39)).toBe(false); // finish
+  });
+
+  it('QUIZ_TILE_INDICES tem exatamente 8 casas (2 por zona)', () => {
+    expect(QUIZ_TILE_INDICES.size).toBe(8);
+  });
+});
+
+describe('getNormForTile', () => {
+  it('zona 1 (tiles 0–9) usa activeNormIds[0]', () => {
+    const norms = ['NR-A', 'NR-B', 'NR-C', 'NR-D'];
+    expect(getNormForTile(5, norms)).toBe('NR-A');
+    expect(getNormForTile(0, norms)).toBe('NR-A');
+    expect(getNormForTile(9, norms)).toBe('NR-A');
+  });
+
+  it('zona 2 (tiles 10–19) usa activeNormIds[1]', () => {
+    const norms = ['NR-A', 'NR-B', 'NR-C', 'NR-D'];
+    expect(getNormForTile(15, norms)).toBe('NR-B');
+  });
+
+  it('zona 3 (tiles 20–29) usa activeNormIds[2]', () => {
+    const norms = ['NR-A', 'NR-B', 'NR-C', 'NR-D'];
+    expect(getNormForTile(25, norms)).toBe('NR-C');
+  });
+
+  it('zona 4 (tiles 30–39) usa activeNormIds[3]', () => {
+    const norms = ['NR-A', 'NR-B', 'NR-C', 'NR-D'];
+    expect(getNormForTile(35, norms)).toBe('NR-D');
+  });
+
+  it('ordem das normas é configurável pelo facilitador', () => {
+    const invertida = ['NR-D', 'NR-C', 'NR-B', 'NR-A'];
+    expect(getNormForTile(5, invertida)).toBe('NR-D');
+    expect(getNormForTile(35, invertida)).toBe('NR-A');
+  });
+
+  it('se activeNormIds tiver menos zonas que grupos, usa a última norma', () => {
+    expect(getNormForTile(35, ['NR-A'])).toBe('NR-A');
   });
 });

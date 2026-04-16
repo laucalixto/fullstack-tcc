@@ -76,3 +76,23 @@ export function isStartTile(index: number): boolean {
 export function isFinishTile(index: number): boolean {
   return index === BOARD_PATH.length - 1;
 }
+
+/**
+ * Casas do tabuleiro que disparam um desafio de quiz.
+ * 2 casas por grupo de 10 (posições relativas 5 e 8 dentro do grupo).
+ */
+export const QUIZ_TILE_INDICES = new Set([5, 8, 15, 18, 25, 28, 35, 38]);
+
+export function isQuizTile(index: number): boolean {
+  return QUIZ_TILE_INDICES.has(index);
+}
+
+/**
+ * Determina a norma ativa para uma casa, baseada no grupo de 10.
+ * O grupo mapeia para a norma na posição correspondente de activeNormIds.
+ * Se não houver norma para o grupo, retorna a última norma da lista.
+ */
+export function getNormForTile(tileIndex: number, activeNormIds: string[]): string {
+  const group = Math.min(Math.floor(tileIndex / 10), activeNormIds.length - 1);
+  return activeNormIds[group];
+}

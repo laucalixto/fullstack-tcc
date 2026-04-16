@@ -4,7 +4,7 @@ import { SessionManager } from '../game/SessionManager';
 
 export function registerRoomHandler(socket: Socket, io: Server, sm: SessionManager): void {
   socket.on(EVENTS.ROOM_CREATE, (payload: RoomCreatePayload) => {
-    const session = sm.createSession(payload.facilitatorId);
+    const session = sm.createSession(payload.facilitatorId, payload.quizConfig);
     socket.join(session.id);
     socket.emit(EVENTS.GAME_STATE, session);
   });

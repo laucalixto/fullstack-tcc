@@ -15,6 +15,18 @@ export interface Player {
   isConnected: boolean;
 }
 
+export interface QuizConfig {
+  activeNormIds: string[];  // normas ativas escolhidas pelo facilitador
+  timeoutSeconds: number;   // tempo por pergunta (padrão: 30)
+}
+
+export interface QuizServedQuestion {
+  id: string;
+  normId: string;
+  text: string;
+  options: string[]; // embaralhadas — sem correctIndex
+}
+
 export interface GameSession {
   id: SessionId;
   pin: string;
@@ -23,4 +35,5 @@ export interface GameSession {
   players: Player[];
   currentPlayerIndex: number;
   createdAt: number;
+  quizConfig: QuizConfig;
 }
