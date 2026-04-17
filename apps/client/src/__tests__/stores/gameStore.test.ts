@@ -148,8 +148,8 @@ describe('gameStore', () => {
 
   it('setLeaderboardEntries armazena lista de entradas', () => {
     const entries: LeaderboardEntry[] = [
-      { playerId: 'p1', name: 'Alice', totalScore: 500, rank: 1, gamesPlayed: 5 },
-      { playerId: 'p2', name: 'Bob', totalScore: 400, rank: 2, gamesPlayed: 4 },
+      { playerId: 'p1', name: 'Alice', totalScore: 500, rank: 1, industrialUnit: 'Unidade Sul' },
+      { playerId: 'p2', name: 'Bob', totalScore: 400, rank: 2, industrialUnit: 'Unidade Norte' },
     ];
 
     useGameStore.getState().setLeaderboardEntries(entries);
@@ -159,7 +159,7 @@ describe('gameStore', () => {
   });
 
   it('setLeaderboardEntries sobrescreve entradas anteriores', () => {
-    const e1: LeaderboardEntry[] = [{ playerId: 'p1', name: 'Alice', totalScore: 500, rank: 1, gamesPlayed: 5 }];
+    const e1: LeaderboardEntry[] = [{ playerId: 'p1', name: 'Alice', totalScore: 500, rank: 1, industrialUnit: 'Unidade Sul' }];
     const e2: LeaderboardEntry[] = [];
 
     useGameStore.getState().setLeaderboardEntries(e1);
