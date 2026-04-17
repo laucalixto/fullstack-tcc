@@ -16,6 +16,8 @@ export default defineConfig({
         'src/main.tsx',
         'src/vite-env.d.ts',
         'src/ws/socket.ts',
+        // Wiring/routing — smoke-testado em AppRouter.test.tsx; callbacks cobertos por E2E
+        'src/AppRouter.tsx',
         // Requer WebGL/contexto de renderização — coberto pelo E2E Playwright
         'src/three/scene.ts',
         'src/three/camera.ts',
