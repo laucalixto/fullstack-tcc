@@ -20,6 +20,12 @@ export default function App() {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
 
+    // StrictMode desmonta/remonta o componente — se o evento connect disparou
+    // durante o cleanup, o socket já está conectado quando o efeito re-executa.
+    if (socket.connected) {
+      setWsStatus('connected');
+    }
+
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
