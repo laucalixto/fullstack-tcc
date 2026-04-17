@@ -73,6 +73,8 @@ function LobbyWaitingPage() {
       pin={pin}
       sessionName={sessionName}
       shareLink={shareLink}
+      onStart={() => navigate('/tutorial')}
+      isFacilitator={false}
     />
   );
 }
