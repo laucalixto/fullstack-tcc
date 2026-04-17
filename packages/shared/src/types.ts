@@ -117,3 +117,35 @@ export interface GameResultPayload {
   players: GameResultPlayer[];   // ordenados por rank (1º primeiro)
   durationSeconds: number;       // tempo da partida
 }
+
+// ─── Manager / Dashboard ─────────────────────────────────────────────────────
+
+export interface ManagerLoginData {
+  email: string;
+  password: string;
+}
+
+export type SessionDifficulty = 'basic' | 'intermediate' | 'advanced';
+
+export interface NewSessionConfig {
+  difficulty: SessionDifficulty;
+  maxPlayers: 2 | 3 | 4;
+  name?: string;
+}
+
+export type SessionStatus = 'active' | 'completed' | 'reviewing';
+
+export interface SessionSummary {
+  id: string;
+  date: string;
+  group: string;
+  avgScore: number | null;
+  status: SessionStatus;
+}
+
+export interface DashboardStats {
+  totalPlayers: number;
+  avgScore: number;
+  completionRate: number;
+  activeSessions: number;
+}
