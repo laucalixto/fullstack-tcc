@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { socket } from './ws/socket';
-import { ThreeCanvas } from './three/ThreeCanvas';
+import { AppRouter } from './AppRouter';
 
 type WsStatus = 'connecting...' | 'connected' | 'disconnected';
 
@@ -27,21 +27,15 @@ export default function App() {
   }, []);
 
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
-      {/* Cena 3D — ocupa toda a tela */}
-      <ThreeCanvas />
-
-      {/* HUD — WebSocket status sobreposto */}
+    <>
+      {/* WS status indicator — overlay em todas as telas */}
       <div
-        style={{ position: 'absolute', top: 16, right: 16 }}
-        className="rounded-lg border border-outline-variant bg-surface-container/80 px-4 py-2 text-center backdrop-blur-sm"
+        style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 9999 }}
+        className="rounded-lg border border-outline-variant bg-surface-container/80 px-3 py-1.5 text-center backdrop-blur-sm"
       >
-        <span className="font-label text-xs uppercase tracking-widest text-on-surface-variant">
-          WS
-        </span>
         <p
           data-testid="ws-status"
-          className={`text-sm font-semibold ${
+          className={`text-xs font-semibold ${
             wsStatus === 'connected'
               ? 'text-secondary'
               : wsStatus === 'disconnected'
@@ -52,6 +46,8 @@ export default function App() {
           {wsStatus}
         </p>
       </div>
-    </div>
+
+      <AppRouter />
+    </>
   );
 }

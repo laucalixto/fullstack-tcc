@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import App from '../App';
 import { socket } from '../ws/socket';
 
@@ -25,25 +26,28 @@ describe('App', () => {
     vi.clearAllMocks();
   });
 
+  const wrap = (ui: React.ReactElement) =>
+    render(<MemoryRouter initialEntries={['/']}>{ui}</MemoryRouter>);
+
   it('renderiza o elemento ws-status', () => {
-    render(<App />);
+    wrap(<App />);
     expect(screen.getByTestId('ws-status')).toBeInTheDocument();
   });
 
   it('exibe "connecting..." no estado inicial', () => {
-    render(<App />);
+    wrap(<App />);
     expect(screen.getByTestId('ws-status')).toHaveTextContent('connecting...');
   });
 
   it('registra listeners connect e disconnect ao montar', () => {
-    render(<App />);
+    wrap(<App />);
     const registeredEvents = onMock().map((call) => call[0] as string);
     expect(registeredEvents).toContain('connect');
     expect(registeredEvents).toContain('disconnect');
   });
 
   it('remove listeners ao desmontar', () => {
-    const { unmount } = render(<App />);
+    const { unmount } = wrap(<App />);
     unmount();
     const removedEvents = offMock().map((call) => call[0] as string);
     expect(removedEvents).toContain('connect');
@@ -51,7 +55,7 @@ describe('App', () => {
   });
 
   it('exibe "connected" ao receber evento connect', () => {
-    render(<App />);
+    wrap(<App />);
     const connectCb = onMock().find((call) => call[0] === 'connect')?.[1] as () => void;
 
     act(() => { connectCb(); });
@@ -60,7 +64,7 @@ describe('App', () => {
   });
 
   it('exibe "disconnected" ao receber evento disconnect', () => {
-    render(<App />);
+    wrap(<App />);
     const disconnectCb = onMock().find((call) => call[0] === 'disconnect')?.[1] as () => void;
 
     act(() => { disconnectCb(); });
