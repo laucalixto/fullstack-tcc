@@ -8,6 +8,10 @@ vi.mock('../three/ThreeCanvas', () => ({
   ThreeCanvas: () => <div data-testid="three-canvas" />,
 }));
 
+vi.mock('../three/EventBus', () => ({
+  gameBus: { emit: vi.fn(), on: vi.fn(() => vi.fn()) },
+}));
+
 // Handlers registry compartilhado entre mock e testes
 const socketHandlers: Record<string, ((...args: unknown[]) => void)[]> = {};
 
@@ -36,6 +40,7 @@ import { useGameStore } from '../stores/gameStore';
 import { socket } from '../ws/socket';
 import { EVENTS } from '@safety-board/shared';
 import { GamePage } from '../three/GamePage';
+import { gameBus } from '../three/EventBus';
 
 // ─── Dados de teste ───────────────────────────────────────────────────────────
 
@@ -72,6 +77,7 @@ describe('GamePage', () => {
   beforeEach(() => {
     mockNavigate.mockClear();
     vi.mocked(socket.emit).mockClear();
+    vi.mocked(gameBus.emit).mockClear();
     Object.keys(socketHandlers).forEach((k) => { socketHandlers[k] = []; });
     useGameStore.setState({
       session: null,
@@ -178,5 +184,38 @@ describe('GamePage', () => {
     useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1', isMyTurn: true });
     renderGamePage();
     expect(screen.getByTestId('inactivity-timer')).toBeInTheDocument();
+  });
+
+  // ─── gameBus bridge (Fase E) ─────────────────────────────────────────────────
+
+  it('emite players:sync ao montar com sessão já na store (sem aguardar GAME_STATE)', () => {
+    const session = makeSession('p1');
+    useGameStore.setState({ session, myPlayerId: 'p1' });
+    renderGamePage();
+    expect(gameBus.emit).toHaveBeenCalledWith('players:sync', session.players);
+  });
+
+  it('emite active:player ao montar com jogador atual na store', () => {
+    const session = makeSession('p1');
+    session.players[0].position = 4;
+    useGameStore.setState({ session, myPlayerId: 'p1' });
+    renderGamePage();
+    expect(gameBus.emit).toHaveBeenCalledWith('active:player', { tileIndex: 4 });
+  });
+
+  it('GAME_STATE emite players:sync no gameBus com lista de jogadores', () => {
+    renderGamePage();
+    const session = makeSession('p1');
+    act(() => { triggerSocket(EVENTS.GAME_STATE, session); });
+    expect(gameBus.emit).toHaveBeenCalledWith('players:sync', session.players);
+  });
+
+  it('TURN_CHANGED emite active:player no gameBus com tileIndex do jogador ativo', () => {
+    const session = makeSession('p1');
+    session.players[0].position = 7; // p1 está na casa 7
+    useGameStore.setState({ session, myPlayerId: 'p1' });
+    renderGamePage();
+    act(() => { triggerSocket(EVENTS.TURN_CHANGED, { playerId: 'p1' }); });
+    expect(gameBus.emit).toHaveBeenCalledWith('active:player', { tileIndex: 7 });
   });
 });

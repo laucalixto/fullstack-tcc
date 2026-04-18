@@ -10,6 +10,8 @@ import { InactivityTimer } from '../hud/InactivityTimer';
 import { ChallengeModal } from '../lobby/ChallengeModal';
 import { useGameStore } from '../stores/gameStore';
 import { socket } from '../ws/socket';
+import { gameBus } from './EventBus';
+import type { TurnChangedPayload } from '@safety-board/shared';
 
 interface QuizQuestionPayload {
   sessionId: string;
@@ -34,8 +36,30 @@ export function GamePage() {
   const [quizPayload, setQuizPayload] = useState<QuizQuestionPayload | null>(null);
   const [quizResult, setQuizResult] = useState<'correct' | 'incorrect' | undefined>();
 
+  // Sincroniza o estado inicial ao montar: GAME_STATE pode ter chegado antes do GamePage existir
   useEffect(() => {
-    function onGameState(s: GameSession) { setSession(s); }
+    const s = useGameStore.getState().session;
+    if (!s) return;
+    gameBus.emit('players:sync', s.players);
+    const currentPlayer = s.players[s.currentPlayerIndex];
+    if (currentPlayer) {
+      gameBus.emit('active:player', { tileIndex: currentPlayer.position });
+    }
+  }, []);
+
+  useEffect(() => {
+    function onGameState(s: GameSession) {
+      setSession(s);
+      gameBus.emit('players:sync', s.players);
+    }
+
+    function onTurnChanged({ playerId }: TurnChangedPayload) {
+      const session = useGameStore.getState().session;
+      const player = session?.players.find((p) => p.id === playerId);
+      if (player !== undefined) {
+        gameBus.emit('active:player', { tileIndex: player.position });
+      }
+    }
 
     function onQuizQuestion(payload: QuizQuestionPayload) {
       setQuizResult(undefined);
@@ -53,12 +77,14 @@ export function GamePage() {
     }
 
     socket.on(EVENTS.GAME_STATE,    onGameState);
+    socket.on(EVENTS.TURN_CHANGED,  onTurnChanged);
     socket.on(EVENTS.QUIZ_QUESTION, onQuizQuestion);
     socket.on(EVENTS.QUIZ_RESULT,   onQuizResult);
     socket.on(EVENTS.GAME_FINISHED, onGameFinished);
 
     return () => {
       socket.off(EVENTS.GAME_STATE,    onGameState);
+      socket.off(EVENTS.TURN_CHANGED,  onTurnChanged);
       socket.off(EVENTS.QUIZ_QUESTION, onQuizQuestion);
       socket.off(EVENTS.QUIZ_RESULT,   onQuizResult);
       socket.off(EVENTS.GAME_FINISHED, onGameFinished);

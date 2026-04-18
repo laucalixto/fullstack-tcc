@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { BOARD_PATH } from '@safety-board/shared';
+import type { Player } from '@safety-board/shared';
 import { CameraController } from './camera';
+import { PawnManager } from './PawnManager';
+import { gameBus } from './EventBus';
 
 // ─── Constantes de cena ───────────────────────────────────────────────────────
 
@@ -70,6 +73,31 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   const cameraController = new CameraController(camera, controls);
 
+  // PawnManager — gerencia peões no tabuleiro
+  const pawnManager = new PawnManager(scene);
+  const knownPlayers = new Set<string>();
+
+  // Posição do jogador ativo — câmera segue este ponto
+  const activePos = new THREE.Vector3(BOARD_PATH[0].x, BOARD_PATH[0].y, BOARD_PATH[0].z);
+
+  // gameBus: sincroniza peões com o estado do jogo (emitido pelo GamePage via socket)
+  const unsubPlayers = gameBus.on<Player[]>('players:sync', (players) => {
+    players.forEach((player, i) => {
+      if (!knownPlayers.has(player.id)) {
+        pawnManager.addPawn(player.id, i);
+        knownPlayers.add(player.id);
+      }
+      pawnManager.movePawn(player.id, player.position);
+    });
+  });
+
+  // gameBus: câmera salta para o peão do jogador ativo na troca de turno
+  const unsubActive = gameBus.on<{ tileIndex: number }>('active:player', ({ tileIndex }) => {
+    const tile = BOARD_PATH[tileIndex] ?? BOARD_PATH[0];
+    activePos.set(tile.x, tile.y, tile.z);
+    cameraController.snapToPlayer(activePos);
+  });
+
   // Board tiles
   const tileGeo = new THREE.BoxGeometry(1, 0.3, 1);
   BOARD_PATH.forEach((tile) => {
@@ -95,12 +123,9 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   // Animation loop
   let animId: number;
-  const clock = new THREE.Clock();
 
   function animate() {
     animId = requestAnimationFrame(animate);
-    const activeTile = BOARD_PATH[0]; // placeholder — atualizado via gameBus na Fase 5
-    const activePos = new THREE.Vector3(activeTile.x, activeTile.y, activeTile.z);
     cameraController.update(activePos);
     renderer.render(scene, camera);
   }
@@ -121,6 +146,8 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   return () => {
     cancelAnimationFrame(animId);
     window.removeEventListener('resize', onResize);
+    unsubPlayers();
+    unsubActive();
     controls.dispose();
     renderer.dispose();
     container.removeChild(renderer.domElement);

@@ -117,3 +117,13 @@ export interface PlayerGameReadyPayload {
 export interface GameBeginPayload {
   sessionId: string;
 }
+
+export interface TurnChangedPayload {
+  playerId: string;
+}
+
+export interface TurnResultPayload {
+  playerId: string;
+  dice: number;
+  newPosition: number;
+}
