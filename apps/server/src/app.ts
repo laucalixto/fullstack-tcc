@@ -6,6 +6,8 @@ import { FacilitatorStore } from './auth/FacilitatorStore.js';
 import { createAuthRouter } from './auth/auth.router.js';
 import { PlayerStore } from './players/PlayerStore.js';
 import { createPlayerRouter } from './players/player.router.js';
+import { SessionManager } from './game/SessionManager.js';
+import { createManagerRouter } from './manager/manager.router.js';
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
@@ -18,6 +20,7 @@ const authLimiter = rateLimit({
 interface AppOptions {
   facilitatorStore?: FacilitatorStore;
   playerStore?: PlayerStore;
+  sessionManager?: SessionManager;
 }
 
 export function createApp(options: AppOptions = {}): Express {
@@ -40,6 +43,9 @@ export function createApp(options: AppOptions = {}): Express {
   app.get('/api/leaderboard', (_req, res) => {
     res.json(playerStore.leaderboard());
   });
+
+  const sessionManager = options.sessionManager ?? new SessionManager();
+  app.use('/api/manager', createManagerRouter(playerStore, sessionManager));
 
   return app;
 }

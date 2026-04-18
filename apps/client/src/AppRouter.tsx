@@ -184,7 +184,7 @@ function ManagerLoginPage() {
     useManagerStore.getState().setLoading(true);
     useManagerStore.getState().setError(null);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -205,8 +205,26 @@ function ManagerLoginPage() {
 
 function ManagerDashboardPage() {
   const navigate = useNavigate();
+  const token = useManagerStore((s) => s.token);
   const stats = useManagerStore((s) => s.stats);
   const recentSessions = useManagerStore((s) => s.recentSessions);
+  const setStats = useManagerStore((s) => s.setStats);
+  const setRecentSessions = useManagerStore((s) => s.setRecentSessions);
+
+  const SERVER = import.meta.env.VITE_SERVER_URL ?? '';
+
+  useEffect(() => {
+    if (!token) return;
+    const headers = { Authorization: `Bearer ${token}` };
+    fetch(`${SERVER}/api/manager/stats`, { headers })
+      .then((r) => r.json())
+      .then(setStats)
+      .catch(() => {});
+    fetch(`${SERVER}/api/manager/sessions`, { headers })
+      .then((r) => r.json())
+      .then(setRecentSessions)
+      .catch(() => {});
+  }, [token, SERVER, setStats, setRecentSessions]);
 
   const defaultStats = { totalPlayers: 0, avgScore: 0, completionRate: 0, activeSessions: 0 };
 

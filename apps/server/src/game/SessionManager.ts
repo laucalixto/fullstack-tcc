@@ -252,4 +252,11 @@ export class SessionManager {
 
     return { sessionId, players, durationSeconds };
   }
+
+  allSessions(): Array<{ session: GameSession; startedAt: number | null }> {
+    return [...this.sessions.values()].map((e) => ({
+      session: e.session,
+      startedAt: e.startedAt,
+    }));
+  }
 }
