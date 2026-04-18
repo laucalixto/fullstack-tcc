@@ -39,6 +39,8 @@ export interface PongPayload {
 
 export interface RoomCreatePayload {
   facilitatorId: string;
+  name?: string;
+  maxPlayers?: 2 | 3 | 4;
   quizConfig?: {
     activeNormIds: string[];
     timeoutSeconds?: number;

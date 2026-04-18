@@ -1,12 +1,13 @@
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
-import type { PlayerSignupData, NewSessionConfig } from '@safety-board/shared';
+import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload } from '@safety-board/shared';
 
 import { PinEntry } from './lobby/PinEntry';
 import { CharacterSelect } from './lobby/CharacterSelect';
 import { LobbyWaiting } from './lobby/LobbyWaiting';
 import { TutorialOverlay } from './lobby/TutorialOverlay';
 import { ThreeCanvas } from './three/ThreeCanvas';
+import { GamePage } from './three/GamePage';
 import { PodiumResults } from './results/PodiumResults';
 import { IndividualCard } from './results/IndividualCard';
 import { PlayerSignup } from './results/PlayerSignup';
@@ -23,12 +24,21 @@ import { EVENTS } from '@safety-board/shared';
 
 // ─── Page containers ──────────────────────────────────────────────────────────
 
+const ROOM_ERROR_MESSAGES: Record<RoomErrorPayload['code'], string> = {
+  ROOM_FULL:           'Sala cheia.',
+  ROOM_NOT_FOUND:      'Sala não encontrada.',
+  GAME_ALREADY_STARTED: 'Partida já iniciada.',
+  NOT_YOUR_TURN:       'Não é o seu turno.',
+};
+
 function PinEntryPage() {
   const navigate = useNavigate();
   const setMyPlayerId = useGameStore((s) => s.setMyPlayerId);
   const setSession = useGameStore((s) => s.setSession);
+  const [roomError, setRoomError] = useState<string | undefined>();
 
   const handleJoin = useCallback((pin: string) => {
+    setRoomError(undefined);
     socket.emit(EVENTS.ROOM_JOIN, { pin, playerName: 'Jogador' });
     socket.once(EVENTS.GAME_STATE, (session) => {
       setSession(session);
@@ -36,9 +46,18 @@ function PinEntryPage() {
       setMyPlayerId(myId);
       navigate('/personagem');
     });
+    socket.once(EVENTS.ROOM_ERROR, (payload: RoomErrorPayload) => {
+      setRoomError(ROOM_ERROR_MESSAGES[payload.code] ?? 'Erro ao entrar na sala.');
+    });
   }, [navigate, setMyPlayerId, setSession]);
 
-  return <PinEntry onJoin={handleJoin} />;
+  return (
+    <PinEntry
+      onJoin={handleJoin}
+      error={roomError}
+      onPinChange={() => setRoomError(undefined)}
+    />
+  );
 }
 
 function CharacterSelectPage() {
@@ -84,9 +103,7 @@ function TutorialPage() {
   return <TutorialOverlay open onClose={() => navigate('/jogo')} />;
 }
 
-function GamePage() {
-  return <ThreeCanvas />;
-}
+// GamePage agora em three/GamePage.tsx (HUD + modal + socket listeners)
 
 const DEFAULT_PLAYER = {
   playerId: '',

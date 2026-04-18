@@ -3,14 +3,16 @@ import { useState } from 'react';
 interface PinEntryProps {
   onJoin: (pin: string) => void;
   error?: string;
+  onPinChange?: () => void;
 }
 
-export function PinEntry({ onJoin, error }: PinEntryProps) {
+export function PinEntry({ onJoin, error, onPinChange }: PinEntryProps) {
   const [pin, setPin] = useState('');
 
   function handlePinChange(e: React.ChangeEvent<HTMLInputElement>) {
     const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
     setPin(digits);
+    onPinChange?.();
   }
 
   function handleSubmit(e: React.FormEvent) {

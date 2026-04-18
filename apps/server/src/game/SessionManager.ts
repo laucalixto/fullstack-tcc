@@ -7,7 +7,7 @@ import { QuizService, type ServedQuestion, type QuizCheckResult } from './QuizSe
 import { EVENTS, isQuizTile, getNormForTile } from '@safety-board/shared';
 import type { GameSession, Player, QuizConfig, GameResultPayload, GameResultPlayer } from '@safety-board/shared';
 
-const MAX_PLAYERS = 4;
+const DEFAULT_MAX_PLAYERS = 4;
 
 const DEFAULT_QUIZ_CONFIG: QuizConfig = {
   activeNormIds: ['NR-06', 'NR-10', 'NR-12', 'NR-35'],
@@ -57,7 +57,7 @@ export class SessionManager {
     }
   }
 
-  createSession(facilitatorId: string, quizConfig?: Partial<QuizConfig>, name?: string): GameSession {
+  createSession(facilitatorId: string, quizConfig?: Partial<QuizConfig>, name?: string, maxPlayers: 2 | 3 | 4 = DEFAULT_MAX_PLAYERS): GameSession {
     const existingPins = new Set(this.pinToId.keys());
     const pin = PINGenerator.generate(existingPins);
     const id = randomUUID();
@@ -78,6 +78,7 @@ export class SessionManager {
         activeNormIds: quizConfig?.activeNormIds ?? DEFAULT_QUIZ_CONFIG.activeNormIds,
         timeoutSeconds: quizConfig?.timeoutSeconds ?? DEFAULT_QUIZ_CONFIG.timeoutSeconds,
       },
+      maxPlayers,
     };
 
     this.sessions.set(id, {
@@ -103,7 +104,7 @@ export class SessionManager {
     return this.sessions.get(id)?.session;
   }
 
-  joinSession(pin: string, playerName: string): { session: GameSession; playerId: string } {
+  joinSession(pin: string, playerName: string): { session: GameSession; playerId: string; isFull: boolean } {
     const id = this.pinToId.get(pin);
     if (!id) throw new Error('ROOM_NOT_FOUND');
 
@@ -111,7 +112,7 @@ export class SessionManager {
     const { session } = entry;
 
     if (session.state !== 'WAITING') throw new Error('GAME_ALREADY_STARTED');
-    if (session.players.length >= MAX_PLAYERS) throw new Error('ROOM_FULL');
+    if (session.players.length >= session.maxPlayers) throw new Error('ROOM_FULL');
 
     const playerId = randomUUID();
     const player: Player = {
@@ -122,7 +123,8 @@ export class SessionManager {
       isConnected: true,
     };
     session.players.push(player);
-    return { session, playerId };
+    const isFull = session.players.length >= session.maxPlayers;
+    return { session, playerId, isFull };
   }
 
   startGame(sessionId: string): GameSession {

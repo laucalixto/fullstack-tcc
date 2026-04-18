@@ -79,6 +79,7 @@ export interface GameSession {
   currentPlayerIndex: number;
   createdAt: number;
   quizConfig: QuizConfig;
+  maxPlayers: 2 | 3 | 4;
 }
 
 // ─── Registro de jogador pós-partida ─────────────────────────────────────────

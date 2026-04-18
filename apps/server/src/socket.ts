@@ -5,8 +5,13 @@ import { registerRoomHandler } from './handlers/room.handler.js';
 import { registerGameHandler } from './handlers/game.handler.js';
 import { SessionManager } from './game/SessionManager.js';
 
-export function attachSocketIO(httpServer: HttpServer, sessionManager?: SessionManager): Server {
+interface SocketOpts {
+  autoStartDelayMs?: number;
+}
+
+export function attachSocketIO(httpServer: HttpServer, sessionManager?: SessionManager, opts?: SocketOpts): Server {
   const sm = sessionManager ?? new SessionManager();
+  const autoStartDelayMs = opts?.autoStartDelayMs ?? 5000;
 
   const io = new Server(httpServer, {
     cors: {
@@ -19,7 +24,7 @@ export function attachSocketIO(httpServer: HttpServer, sessionManager?: SessionM
     console.log(`[socket] connected: ${socket.id}`);
 
     registerPingHandler(socket);
-    registerRoomHandler(socket, io, sm);
+    registerRoomHandler(socket, io, sm, autoStartDelayMs);
     registerGameHandler(socket, io, sm);
 
     socket.on('disconnect', (reason) => {
