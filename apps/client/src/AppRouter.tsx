@@ -1,5 +1,5 @@
 import { Routes, Route, useNavigate } from 'react-router-dom';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { PlayerSignupData, NewSessionConfig } from '@safety-board/shared';
 
 import { PinEntry } from './lobby/PinEntry';
@@ -120,16 +120,51 @@ function IndividualResultPage() {
 
 function PlayerSignupPage() {
   const navigate = useNavigate();
-  return (
-    <PlayerSignup
-      onSignup={(_data: PlayerSignupData) => navigate('/ranking')}
-    />
-  );
+  const gameResult = useGameStore((s) => s.gameResult);
+  const [error, setError] = useState<string | undefined>();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSignup = useCallback(async (data: PlayerSignupData) => {
+    setIsLoading(true);
+    setError(undefined);
+    try {
+      const sessionScore = gameResult?.players.find((p) => p.playerId)?.score;
+      const res = await fetch(
+        `${import.meta.env.VITE_SERVER_URL ?? ''}/api/players/register`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data, sessionScore }),
+        },
+      );
+      if (res.status === 409) {
+        setError('E-mail já cadastrado.');
+        return;
+      }
+      if (!res.ok) throw new Error('Erro ao cadastrar.');
+      navigate('/ranking');
+    } catch {
+      setError('Não foi possível conectar ao servidor.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [navigate, gameResult]);
+
+  return <PlayerSignup onSignup={handleSignup} error={error} isLoading={isLoading} />;
 }
 
 function GlobalLeaderboardPage() {
   const myPlayerId = useGameStore((s) => s.myPlayerId);
   const entries = useGameStore((s) => s.leaderboardEntries);
+  const setLeaderboardEntries = useGameStore((s) => s.setLeaderboardEntries);
+
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/leaderboard`)
+      .then((r) => r.json())
+      .then(setLeaderboardEntries)
+      .catch(() => {/* silencioso — exibe lista atual */});
+  }, [setLeaderboardEntries]);
+
   return (
     <GlobalLeaderboard
       entries={entries}
