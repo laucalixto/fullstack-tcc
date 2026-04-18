@@ -58,6 +58,7 @@ const makeSession = (myId = 'p1') => ({
   currentPlayerIndex: 0,
   createdAt: Date.now(),
   quizConfig: { activeNormIds: ['NR-06'], timeoutSeconds: 30 },
+  maxPlayers: 2 as const,
 });
 
 const makeQuestion = () => ({
