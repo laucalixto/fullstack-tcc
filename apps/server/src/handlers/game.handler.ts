@@ -5,7 +5,7 @@ import {
   type QuizAnswerPayload,
   type GameFinishedPayload,
 } from '@safety-board/shared';
-import { SessionManager } from '../game/SessionManager';
+import { SessionManager } from '../game/SessionManager.js';
 
 export function registerGameHandler(socket: Socket, io: Server, sm: SessionManager): void {
   socket.on(EVENTS.GAME_START, (payload: { sessionId: string }) => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { SessionManager } from '../../game/SessionManager';
-import { QuizService } from '../../game/QuizService';
+import { SessionManager } from '../../game/SessionManager.js';
+import { QuizService } from '../../game/QuizService.js';
 
 // ─── RED: falha até SessionManager.ts ser implementado ───────────────────────
 

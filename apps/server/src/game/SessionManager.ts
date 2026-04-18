@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { GameStateMachine } from '../engine/GameStateMachine';
-import { TurnManager } from '../engine/TurnManager';
-import { DiceService } from '../engine/DiceService';
-import { PINGenerator } from '../session/PINGenerator';
-import { QuizService, type ServedQuestion, type QuizCheckResult } from './QuizService';
+import { GameStateMachine } from '../engine/GameStateMachine.js';
+import { TurnManager } from '../engine/TurnManager.js';
+import { DiceService } from '../engine/DiceService.js';
+import { PINGenerator } from '../session/PINGenerator.js';
+import { QuizService, type ServedQuestion, type QuizCheckResult } from './QuizService.js';
 import { EVENTS, isQuizTile, getNormForTile } from '@safety-board/shared';
 import type { GameSession, Player, QuizConfig, GameResultPayload, GameResultPlayer } from '@safety-board/shared';
 

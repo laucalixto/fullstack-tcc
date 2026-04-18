@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { createApp } from '../../app';
-import { AuthService } from '../../auth/AuthService';
+import { createApp } from '../../app.js';
+import { AuthService } from '../../auth/AuthService.js';
 
 // ─── RED: falha até jwt.middleware.ts ser implementado ───────────────────────
 

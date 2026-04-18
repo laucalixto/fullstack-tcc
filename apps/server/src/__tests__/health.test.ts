@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { createApp } from '../app';
+import { createApp } from '../app.js';
 
 // ─── RED: falha até app.ts ser implementado ──────────────────────────────────
 

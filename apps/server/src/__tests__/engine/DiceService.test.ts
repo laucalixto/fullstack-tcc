@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DiceService } from '../../engine/DiceService';
+import { DiceService } from '../../engine/DiceService.js';
 
 // ─── RED: falha até DiceService.ts ser implementado ──────────────────────────
 

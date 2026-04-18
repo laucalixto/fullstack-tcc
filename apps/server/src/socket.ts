@@ -1,9 +1,9 @@
 import { Server } from 'socket.io';
-import type { HttpServer } from './types';
-import { registerPingHandler } from './handlers/ping.handler';
-import { registerRoomHandler } from './handlers/room.handler';
-import { registerGameHandler } from './handlers/game.handler';
-import { SessionManager } from './game/SessionManager';
+import type { HttpServer } from './types.js';
+import { registerPingHandler } from './handlers/ping.handler.js';
+import { registerRoomHandler } from './handlers/room.handler.js';
+import { registerGameHandler } from './handlers/game.handler.js';
+import { SessionManager } from './game/SessionManager.js';
 
 export function attachSocketIO(httpServer: HttpServer, sessionManager?: SessionManager): Server {
   const sm = sessionManager ?? new SessionManager();

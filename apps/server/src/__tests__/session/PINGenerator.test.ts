@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PINGenerator } from '../../session/PINGenerator';
+import { PINGenerator } from '../../session/PINGenerator.js';
 
 // ─── RED: falha até PINGenerator.ts ser implementado ─────────────────────────
 

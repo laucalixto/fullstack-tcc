@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { GameStateMachine } from '../../engine/GameStateMachine';
+import { GameStateMachine } from '../../engine/GameStateMachine.js';
 
 // ─── RED: falha até GameStateMachine.ts ser implementado ─────────────────────
 

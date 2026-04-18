@@ -1,8 +1,8 @@
 import { Router, type Request, type Response } from 'express';
-import { AuthService } from './AuthService';
-import { FacilitatorStore } from './FacilitatorStore';
-import { jwtMiddleware, type AuthRequest } from './jwt.middleware';
-import { RegisterSchema, LoginSchema } from './auth.schemas';
+import { AuthService } from './AuthService.js';
+import { FacilitatorStore } from './FacilitatorStore.js';
+import { jwtMiddleware, type AuthRequest } from './jwt.middleware.js';
+import { RegisterSchema, LoginSchema } from './auth.schemas.js';
 
 export function createAuthRouter(store: FacilitatorStore): Router {
   const router = Router();

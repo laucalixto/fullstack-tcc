@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TurnManager } from '../../engine/TurnManager';
+import { TurnManager } from '../../engine/TurnManager.js';
 
 // ─── RED: falha até TurnManager.ts ser implementado ──────────────────────────
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { registerPingHandler } from '../handlers/ping.handler';
+import { registerPingHandler } from '../handlers/ping.handler.js';
 
 describe('PingHandler', () => {
   it('registra listener para o evento "ping"', () => {

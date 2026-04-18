@@ -2,8 +2,8 @@ import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
-import { FacilitatorStore } from './auth/FacilitatorStore';
-import { createAuthRouter } from './auth/auth.router';
+import { FacilitatorStore } from './auth/FacilitatorStore.js';
+import { createAuthRouter } from './auth/auth.router.js';
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min

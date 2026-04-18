@@ -1,6 +1,6 @@
 import type { Socket, Server } from 'socket.io';
 import { EVENTS, type RoomCreatePayload, type RoomJoinPayload, type RoomJoinedPayload, type RoomErrorPayload } from '@safety-board/shared';
-import { SessionManager } from '../game/SessionManager';
+import { SessionManager } from '../game/SessionManager.js';
 
 export function registerRoomHandler(socket: Socket, io: Server, sm: SessionManager): void {
   socket.on(EVENTS.ROOM_CREATE, (payload: RoomCreatePayload) => {

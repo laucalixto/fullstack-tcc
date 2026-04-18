@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { QuizService, type QuizQuestion } from '../../game/QuizService';
+import { QuizService, type QuizQuestion } from '../../game/QuizService.js';
 
 // ─── RED: falha até QuizService.ts ser implementado ──────────────────────────
 

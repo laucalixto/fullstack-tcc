@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
-import { createApp } from './app';
-import { attachSocketIO } from './socket';
+import { createApp } from './app.js';
+import { attachSocketIO } from './socket.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
 

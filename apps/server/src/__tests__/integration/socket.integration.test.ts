@@ -3,8 +3,8 @@ import { createServer, type Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client';
 import { EVENTS, type GameSession } from '@safety-board/shared';
-import { SessionManager } from '../../game/SessionManager';
-import { attachSocketIO } from '../../socket';
+import { SessionManager } from '../../game/SessionManager.js';
+import { attachSocketIO } from '../../socket.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

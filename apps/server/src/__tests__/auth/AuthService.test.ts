@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { AuthService } from '../../auth/AuthService';
+import { AuthService } from '../../auth/AuthService.js';
 
 // ─── RED: falha até AuthService.ts ser implementado ──────────────────────────
 
