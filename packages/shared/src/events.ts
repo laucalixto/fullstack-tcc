@@ -11,11 +11,15 @@ export const EVENTS = {
   ROOM_JOIN: 'room:join',
   ROOM_JOINED: 'room:joined',
   ROOM_ERROR: 'room:error',
+  LOBBY_READY: 'lobby:ready',
+  GAME_STARTING: 'game:starting',
 
   // ─── Jogo ─────────────────────────────────────────────────────────────────
   GAME_START: 'game:start',
   GAME_STATE: 'game:state',
   GAME_FINISHED: 'game:finished',
+  PLAYER_GAME_READY: 'player:game:ready',
+  GAME_BEGIN: 'game:begin',
 
   // ─── Turno ────────────────────────────────────────────────────────────────
   TURN_ROLL: 'turn:roll',
@@ -93,4 +97,23 @@ export interface GameFinishedPayload {
   sessionId: string;
   players: import('./types').GameResultPlayer[];  // ordenados por rank
   durationSeconds: number;
+}
+
+export interface LobbyReadyPayload {
+  sessionId: string;
+  playerId: string;
+}
+
+export interface GameStartingPayload {
+  sessionId: string;
+  autoStartAt: number; // timestamp Date.now() + delayMs
+}
+
+export interface PlayerGameReadyPayload {
+  sessionId: string;
+  playerId: string;
+}
+
+export interface GameBeginPayload {
+  sessionId: string;
 }

@@ -17,8 +17,10 @@ export function PlayerList({ players, currentPlayerIndex, myPlayerId }: PlayerLi
           data-me={player.id === myPlayerId ? 'true' : 'false'}
         >
           <span>{player.name}</span>
-          <span>{player.position}</span>
-          <span>{player.score}</span>
+          {' '}
+          <span>casa {player.position}</span>
+          {' '}
+          <span>{player.score} pts</span>
           {!player.isConnected && (
             <span data-testid={`player-disconnected-${player.id}`}>desconectado</span>
           )}

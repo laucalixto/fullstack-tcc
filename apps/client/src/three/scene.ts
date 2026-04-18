@@ -19,10 +19,12 @@ function tileGroup(index: number): number {
 // ─── Scene builder ────────────────────────────────────────────────────────────
 
 export function initThreeScene(container: HTMLDivElement): () => void {
-  // Renderer
+  // Renderer — usa window.inner* como fallback se o container ainda não tiver dimensões
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(container.clientWidth, container.clientHeight);
+  const initW = container.clientWidth  || window.innerWidth;
+  const initH = container.clientHeight || window.innerHeight;
+  renderer.setSize(initW, initH);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
@@ -107,9 +109,11 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   // Resize handler
   function onResize() {
-    camera.aspect = container.clientWidth / container.clientHeight;
+    const w = container.clientWidth  || window.innerWidth;
+    const h = container.clientHeight || window.innerHeight;
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setSize(w, h);
   }
   window.addEventListener('resize', onResize);
 

@@ -18,8 +18,10 @@ export function ScoreHUD({ players, currentPlayerIndex, myPlayerId }: ScoreHUDPr
           data-disconnected={player.isConnected ? 'false' : 'true'}
         >
           <span>{player.name}</span>
-          <span>{player.score}</span>
-          <span>{player.position}</span>
+          {' '}
+          <span>{player.score} pts</span>
+          {' '}
+          <span>casa {player.position}</span>
         </div>
       ))}
     </div>

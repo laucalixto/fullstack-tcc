@@ -1,6 +1,7 @@
+import { useState, useEffect } from 'react';
 import type { Player } from '@safety-board/shared';
 
-const MAX_PLAYERS = 4;
+const DEFAULT_MAX_PLAYERS = 4;
 
 interface LobbyWaitingProps {
   pin: string;
@@ -9,6 +10,8 @@ interface LobbyWaitingProps {
   isFacilitator: boolean;
   sessionName?: string;
   shareLink?: string;
+  maxPlayers?: number;
+  autoStartAt?: number; // timestamp do servidor: Date.now() + delayMs
 }
 
 export function LobbyWaiting({
@@ -18,9 +21,21 @@ export function LobbyWaiting({
   isFacilitator,
   sessionName,
   shareLink,
+  maxPlayers = DEFAULT_MAX_PLAYERS,
+  autoStartAt,
 }: LobbyWaitingProps) {
-  const canStart = players.length >= 2;
-  const emptySlots = MAX_PLAYERS - players.length;
+  const canStart   = players.length >= 2;
+  const emptySlots = maxPlayers - players.length;
+
+  const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    if (!autoStartAt) { setCountdown(0); return; }
+    const update = () => setCountdown(Math.max(Math.round((autoStartAt - Date.now()) / 1000), 0));
+    update();
+    const id = setInterval(update, 500);
+    return () => clearInterval(id);
+  }, [autoStartAt]);
 
   return (
     <div className="bg-surface text-on-surface min-h-screen flex flex-col font-body">
@@ -44,11 +59,20 @@ export function LobbyWaiting({
               )}
             </div>
             <h1 className="text-5xl md:text-6xl font-black tracking-tighter text-on-surface">
-              Aguardando jogadores...
+              {autoStartAt ? 'Todos prontos!' : 'Aguardando jogadores...'}
             </h1>
-            <p className="text-secondary text-lg max-w-2xl mx-auto">
-              A partida começará assim que o facilitador iniciar a sessão.
-            </p>
+            {autoStartAt ? (
+              <p
+                data-testid="autostart-countdown"
+                className="text-primary text-xl font-black max-w-2xl mx-auto"
+              >
+                Partida iniciando em {countdown}s...
+              </p>
+            ) : (
+              <p className="text-secondary text-lg max-w-2xl mx-auto">
+                A partida começará assim que o facilitador iniciar a sessão.
+              </p>
+            )}
           </div>
 
           {/* Players card */}

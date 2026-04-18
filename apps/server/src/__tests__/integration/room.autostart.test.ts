@@ -122,37 +122,4 @@ describe('room — maxPlayers e auto-start (integração)', () => {
     expect(joinedB).not.toBeNull();
   }, 10000);
 
-  // ── Bug 1: auto-start quando sala lota ────────────────────────────────────
-
-  it('jogo inicia automaticamente após delay quando sala atinge maxPlayers', async () => {
-    const fac = await connect();
-    const p1  = await connect();
-    const p2  = await connect();
-
-    const state = await new Promise<GameSession>((resolve) => {
-      fac.once(EVENTS.GAME_STATE, resolve);
-      fac.emit(EVENTS.ROOM_CREATE, { facilitatorId: 'fac-1', maxPlayers: 2 });
-    });
-    const pin = state.pin;
-
-    // P1 e P2 entram — sala lota → deve disparar auto-start após 100ms
-    await new Promise<void>((r) => { p1.once(EVENTS.GAME_STATE, () => r()); p1.emit(EVENTS.ROOM_JOIN, { pin, playerName: 'P1' }); });
-
-    // Aguarda auto-start após P2 entrar (2000ms para folga de rede + delay=100ms)
-    const [gameState] = await Promise.all([
-      waitFor<GameSession>(p2, EVENTS.GAME_STATE, 2000),
-      new Promise<void>((r) => {
-        p2.emit(EVENTS.ROOM_JOIN, { pin, playerName: 'P2' });
-        r();
-      }),
-    ]);
-
-    // Primeiro GAME_STATE é do join; aguarda o próximo com state=ACTIVE
-    if (gameState.state !== 'ACTIVE') {
-      const activeState = await waitFor<GameSession>(p2, EVENTS.GAME_STATE, 2000);
-      expect(activeState.state).toBe('ACTIVE');
-    } else {
-      expect(gameState.state).toBe('ACTIVE');
-    }
-  }, 10000);
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { StrictMode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { ThreeCanvas } from '../../three/ThreeCanvas';
 
@@ -37,5 +38,29 @@ describe('ThreeCanvas', () => {
     const { unmount } = render(<ThreeCanvas />);
     unmount();
     expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  // ─── Compatibilidade StrictMode ──────────────────────────────────────────────
+  //
+  // Com useCallback+[initialized] (padrão Dirksen original), o StrictMode dispara
+  // o cleanup do useEffect, descartando o renderer e deixando o canvas em branco.
+  // Com useCallback+[] (padrão corrigido), não há useEffect: o callback ref garante
+  // o cleanup apenas no unmount real. O canvas permanece vivo durante o ciclo
+  // StrictMode (mount → simulated-unmount → simulated-remount).
+  it('não invoca cleanup durante ciclo StrictMode — canvas permanece vivo', async () => {
+    const cleanup = vi.fn();
+    const { initThreeScene } = await import('../../three/scene');
+    vi.mocked(initThreeScene).mockReturnValue(cleanup);
+
+    render(
+      <StrictMode>
+        <ThreeCanvas />
+      </StrictMode>,
+    );
+
+    // init chamado exatamente uma vez (o canvas não é descartado e recriado)
+    expect(initThreeScene).toHaveBeenCalledTimes(1);
+    // cleanup NÃO deve ser chamado enquanto o componente está montado
+    expect(cleanup).not.toHaveBeenCalled();
   });
 });

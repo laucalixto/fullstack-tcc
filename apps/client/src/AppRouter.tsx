@@ -1,10 +1,11 @@
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
-import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload } from '@safety-board/shared';
+import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload, GameStartingPayload } from '@safety-board/shared';
 
 import { PinEntry } from './lobby/PinEntry';
 import { CharacterSelect } from './lobby/CharacterSelect';
 import { LobbyWaiting } from './lobby/LobbyWaiting';
+import { GameLoading } from './lobby/GameLoading';
 import { TutorialOverlay } from './lobby/TutorialOverlay';
 import { ThreeCanvas } from './three/ThreeCanvas';
 import { GamePage } from './three/GamePage';
@@ -74,12 +75,32 @@ function CharacterSelectPage() {
 
 function LobbyWaitingPage() {
   const navigate = useNavigate();
-  const session = useGameStore((s) => s.session);
-  const players = session?.players ?? [];
-  const pin = session?.pin ?? '------';
-  const sessionName = session?.name;
-  const shareLink = session?.shareLink;
+  const session    = useGameStore((s) => s.session);
+  const myPlayerId = useGameStore((s) => s.myPlayerId);
+  const [autoStartAt, setAutoStartAt] = useState<number | undefined>();
 
+  const players     = session?.players ?? [];
+  const pin         = session?.pin ?? '------';
+  const sessionName = session?.name;
+  const shareLink   = session?.shareLink;
+  const maxPlayers  = session?.maxPlayers;
+
+  // Sinaliza ao servidor que chegou ao lobby
+  useEffect(() => {
+    if (!session?.id || !myPlayerId) return;
+    socket.emit(EVENTS.LOBBY_READY, { sessionId: session.id, playerId: myPlayerId });
+  }, [session?.id, myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Recebe confirmação do servidor de que todos estão no lobby → exibe countdown
+  useEffect(() => {
+    function onGameStarting(payload: GameStartingPayload) {
+      setAutoStartAt(payload.autoStartAt);
+    }
+    socket.on(EVENTS.GAME_STARTING, onGameStarting);
+    return () => { socket.off(EVENTS.GAME_STARTING, onGameStarting); };
+  }, []);
+
+  // Navega ao tutorial quando o jogo efetivamente inicia
   useSocket(useCallback((updatedSession) => {
     if (updatedSession.state === 'ACTIVE') {
       navigate('/tutorial');
@@ -92,7 +113,9 @@ function LobbyWaitingPage() {
       pin={pin}
       sessionName={sessionName}
       shareLink={shareLink}
-      onStart={() => navigate('/tutorial')}
+      maxPlayers={maxPlayers}
+      autoStartAt={autoStartAt}
+      onStart={() => {}}
       isFacilitator={false}
     />
   );
@@ -100,7 +123,28 @@ function LobbyWaitingPage() {
 
 function TutorialPage() {
   const navigate = useNavigate();
-  return <TutorialOverlay open onClose={() => navigate('/jogo')} />;
+  return <TutorialOverlay open onClose={() => navigate('/carregando')} />;
+}
+
+function GameLoadingPage() {
+  const navigate   = useNavigate();
+  const session    = useGameStore((s) => s.session);
+  const myPlayerId = useGameStore((s) => s.myPlayerId);
+
+  // Sinaliza ao servidor que saiu do tutorial e está pronto para o tabuleiro
+  useEffect(() => {
+    if (!session?.id || !myPlayerId) return;
+    socket.emit(EVENTS.PLAYER_GAME_READY, { sessionId: session.id, playerId: myPlayerId });
+  }, [session?.id, myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Navega ao tabuleiro quando todos estão prontos
+  useEffect(() => {
+    function onGameBegin() { navigate('/jogo'); }
+    socket.on(EVENTS.GAME_BEGIN, onGameBegin);
+    return () => { socket.off(EVENTS.GAME_BEGIN, onGameBegin); };
+  }, [navigate]);
+
+  return <GameLoading />;
 }
 
 // GamePage agora em three/GamePage.tsx (HUD + modal + socket listeners)
@@ -291,6 +335,7 @@ export function AppRouter() {
       <Route path="/personagem" element={<CharacterSelectPage />} />
       <Route path="/lobby" element={<LobbyWaitingPage />} />
       <Route path="/tutorial" element={<TutorialPage />} />
+      <Route path="/carregando" element={<GameLoadingPage />} />
       <Route path="/jogo" element={<GamePage />} />
       <Route path="/podio" element={<PodiumPage />} />
       <Route path="/resultado" element={<IndividualResultPage />} />

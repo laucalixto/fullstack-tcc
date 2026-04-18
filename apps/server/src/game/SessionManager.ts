@@ -30,6 +30,8 @@ interface SessionEntry {
   startedAt: number | null;
   correctAnswersByPlayer: Map<string, number>;
   totalAnswersByPlayer: Map<string, number>;
+  lobbyReadyPlayers: Set<string>;
+  gameReadyPlayers: Set<string>;
 }
 
 interface SessionManagerConfig {
@@ -90,6 +92,8 @@ export class SessionManager {
       startedAt: null,
       correctAnswersByPlayer: new Map(),
       totalAnswersByPlayer: new Map(),
+      lobbyReadyPlayers: new Set(),
+      gameReadyPlayers: new Set(),
     });
     this.pinToId.set(pin, id);
     return session;
@@ -253,6 +257,20 @@ export class SessionManager {
     }));
 
     return { sessionId, players, durationSeconds };
+  }
+
+  markLobbyReady(sessionId: string, playerId: string): boolean {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) throw new Error('SESSION_NOT_FOUND');
+    entry.lobbyReadyPlayers.add(playerId);
+    return entry.lobbyReadyPlayers.size >= entry.session.maxPlayers;
+  }
+
+  markGameReady(sessionId: string, playerId: string): boolean {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) throw new Error('SESSION_NOT_FOUND');
+    entry.gameReadyPlayers.add(playerId);
+    return entry.gameReadyPlayers.size >= entry.session.players.length;
   }
 
   allSessions(): Array<{ session: GameSession; startedAt: number | null }> {

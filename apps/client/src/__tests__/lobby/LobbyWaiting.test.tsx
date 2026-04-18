@@ -111,4 +111,55 @@ describe('LobbyWaiting', () => {
     );
     expect(screen.getByTestId('lobby-share-link')).toBeInTheDocument();
   });
+
+  // ─── maxPlayers + autoStartAt ────────────────────────────────────────────────
+
+  it('calcula vagas vazias usando maxPlayers quando fornecido', () => {
+    render(
+      <LobbyWaiting pin="123456" players={makePlayers(1)} maxPlayers={2} onStart={vi.fn()} isFacilitator={false} />,
+    );
+    expect(screen.getAllByText('Aguardando...')).toHaveLength(1);
+  });
+
+  it('exibe contagem regressiva quando autoStartAt está definido', () => {
+    render(
+      <LobbyWaiting
+        pin="123456"
+        players={makePlayers(2)}
+        maxPlayers={2}
+        autoStartAt={Date.now() + 5000}
+        onStart={vi.fn()}
+        isFacilitator={false}
+      />,
+    );
+    expect(screen.getByTestId('autostart-countdown')).toBeInTheDocument();
+  });
+
+  it('não exibe contagem regressiva quando autoStartAt não está definido', () => {
+    render(
+      <LobbyWaiting pin="123456" players={makePlayers(2)} maxPlayers={2} onStart={vi.fn()} isFacilitator={false} />,
+    );
+    expect(screen.queryByTestId('autostart-countdown')).not.toBeInTheDocument();
+  });
+
+  it('não exibe mensagem do facilitador quando autoStartAt está definido', () => {
+    render(
+      <LobbyWaiting
+        pin="123456"
+        players={makePlayers(2)}
+        maxPlayers={2}
+        autoStartAt={Date.now() + 5000}
+        onStart={vi.fn()}
+        isFacilitator={false}
+      />,
+    );
+    expect(screen.queryByText(/facilitador/i)).not.toBeInTheDocument();
+  });
+
+  it('exibe mensagem do facilitador quando autoStartAt não está definido', () => {
+    render(
+      <LobbyWaiting pin="123456" players={makePlayers(1)} maxPlayers={2} onStart={vi.fn()} isFacilitator={false} />,
+    );
+    expect(screen.getByText(/facilitador/i)).toBeInTheDocument();
+  });
 });
