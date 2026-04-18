@@ -74,9 +74,10 @@ function CharacterSelectPage() {
 }
 
 function LobbyWaitingPage() {
-  const navigate = useNavigate();
-  const session    = useGameStore((s) => s.session);
-  const myPlayerId = useGameStore((s) => s.myPlayerId);
+  const navigate    = useNavigate();
+  const session     = useGameStore((s) => s.session);
+  const myPlayerId  = useGameStore((s) => s.myPlayerId);
+  const setSession  = useGameStore((s) => s.setSession);
   const [autoStartAt, setAutoStartAt] = useState<number | undefined>();
 
   const players     = session?.players ?? [];
@@ -100,12 +101,14 @@ function LobbyWaitingPage() {
     return () => { socket.off(EVENTS.GAME_STARTING, onGameStarting); };
   }, []);
 
-  // Navega ao tutorial quando o jogo efetivamente inicia
+  // Mantém a store sincronizada com todos os GAME_STATE recebidos no lobby
+  // (P1 entra antes dos demais — sem isso, não veria os peões de P2–P4 no tabuleiro)
   useSocket(useCallback((updatedSession) => {
+    setSession(updatedSession);
     if (updatedSession.state === 'ACTIVE') {
       navigate('/tutorial');
     }
-  }, [navigate]));
+  }, [navigate, setSession]));
 
   return (
     <LobbyWaiting

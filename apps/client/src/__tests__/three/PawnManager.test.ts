@@ -68,6 +68,36 @@ describe('PawnManager', () => {
     expect(y).toBeGreaterThan(0); // acima do tile
   });
 
+  // ─── Offset de quadrante (2–4 jogadores no mesmo tile não se sobrepõem) ───
+  it('dois peões no mesmo tile recebem posições X ou Z distintas', () => {
+    manager.addPawn('p1', 0);
+    manager.addPawn('p2', 1);
+    manager.movePawn('p1', 0);
+    manager.movePawn('p2', 0);
+
+    const results = ((THREE.Mesh as unknown) as ReturnType<typeof vi.fn>).mock.results;
+    const pos0 = results[0].value.position.set.mock.calls.at(-1) as [number, number, number];
+    const pos1 = results[1].value.position.set.mock.calls.at(-1) as [number, number, number];
+
+    expect(pos0[0] === pos1[0] && pos0[2] === pos1[2]).toBe(false);
+  });
+
+  it('quatro peões no mesmo tile têm posições X/Z todas distintas', () => {
+    ['p1','p2','p3','p4'].forEach((id, i) => {
+      manager.addPawn(id, i);
+      manager.movePawn(id, 0);
+    });
+
+    const results = ((THREE.Mesh as unknown) as ReturnType<typeof vi.fn>).mock.results;
+    const positions = [0,1,2,3].map((i) => {
+      const [x,,z] = results[i].value.position.set.mock.calls.at(-1) as [number,number,number];
+      return `${x.toFixed(3)},${z.toFixed(3)}`;
+    });
+
+    // Todas as 4 posições XZ devem ser únicas
+    expect(new Set(positions).size).toBe(4);
+  });
+
   it('movePawn para playerId inexistente não lança erro', () => {
     expect(() => manager.movePawn('ghost', 0)).not.toThrow();
   });

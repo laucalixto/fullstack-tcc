@@ -3,8 +3,17 @@ import { BOARD_PATH } from '@safety-board/shared';
 
 const PAWN_COLORS = [0xe63946, 0x457b9d, 0x2a9d8f, 0xf4a261] as const;
 
+// Offsets de quadrante: até 4 peões no mesmo tile sem sobreposição
+const TILE_OFFSETS: ReadonlyArray<[number, number]> = [
+  [-0.22, -0.22],
+  [ 0.22, -0.22],
+  [-0.22,  0.22],
+  [ 0.22,  0.22],
+];
+
 export class PawnManager {
-  private readonly pawns = new Map<string, THREE.Mesh>();
+  private readonly pawns        = new Map<string, THREE.Mesh>();
+  private readonly colorIndexes = new Map<string, number>();
   private readonly scene: THREE.Scene;
 
   constructor(scene: THREE.Scene) {
@@ -18,16 +27,18 @@ export class PawnManager {
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
-    mesh.position.set(0, 0.65, 0);
     this.scene.add(mesh);
     this.pawns.set(playerId, mesh);
+    this.colorIndexes.set(playerId, colorIndex);
   }
 
   movePawn(playerId: string, tileIndex: number): void {
     const pawn = this.pawns.get(playerId);
     if (!pawn) return;
     const tile = BOARD_PATH[tileIndex];
-    pawn.position.set(tile.x, tile.y + 0.65, tile.z);
+    const idx = this.colorIndexes.get(playerId) ?? 0;
+    const [ox, oz] = TILE_OFFSETS[idx % TILE_OFFSETS.length];
+    pawn.position.set(tile.x + ox, tile.y + 0.65, tile.z + oz);
   }
 
   removePawn(playerId: string): void {

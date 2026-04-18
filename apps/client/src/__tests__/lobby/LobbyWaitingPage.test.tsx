@@ -126,4 +126,28 @@ describe('LobbyWaitingPage', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith('/tutorial');
   });
+
+  // P1 entra antes dos demais — store tem só ele; cada GAME_STATE broadcast deve
+  // atualizar a store para que P1 veja todos os peões ao entrar no tabuleiro (2–4 jogadores)
+  it.each([2, 3, 4])(
+    'GAME_STATE com %i jogadores atualiza a store para P1 (que entrou antes)',
+    (count) => {
+      const allPlayers = Array.from({ length: 4 }, (_, i) => ({
+        id: `p${i + 1}`, name: `Jogador ${i + 1}`, score: 0, position: 0, isConnected: true,
+      }));
+
+      // P1 já está no lobby com sessão de 1 jogador
+      const sessionP1Only = { ...makeSession(), players: [allPlayers[0]], maxPlayers: count as 2 | 3 | 4 };
+      useGameStore.setState({ session: sessionP1Only, myPlayerId: 'p1' });
+      renderLobby();
+
+      // Servidor broadcast GAME_STATE com N jogadores
+      const sessionFull = { ...makeSession(), players: allPlayers.slice(0, count), maxPlayers: count as 2 | 3 | 4 };
+      act(() => {
+        socketOnHandlers[EVENTS.GAME_STATE]?.forEach((h) => h(sessionFull));
+      });
+
+      expect(useGameStore.getState().session?.players).toHaveLength(count);
+    },
+  );
 });
