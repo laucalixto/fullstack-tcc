@@ -214,7 +214,7 @@ describe('PawnManager — animação casa a casa', () => {
     manager.update(STEP_DURATION * 0.5);
 
     const maxY = Math.max(
-      ...(mesh.position.set.mock.calls.map(([, y]: [unknown, number]) => y)),
+      ...(mesh.position.set.mock.calls.map((args: unknown[]) => args[1] as number)),
     );
     expect(maxY).toBeLessThanOrEqual(PAWN_Y_OFFSET + 0.01); // tolerância de float
   });
