@@ -126,10 +126,13 @@ export function GamePage() {
       // Dual-condition: pawn:done ocorreu — verifica se TURN_CHANGED já veio
       settlePawnDone.current = true;
       checkSettle();
-      setQuizPending((pending) => {
-        if (pending) setQuizPayload(pending);
-        return null;
-      });
+      // Delay de 1s para o jogador perceber onde o peão parou antes do modal abrir
+      setTimeout(() => {
+        setQuizPending((pending) => {
+          if (pending) setQuizPayload(pending);
+          return null;
+        });
+      }, 1000);
       setVictoryPending((wasPending) => {
         if (wasPending) {
           const finishTile = BOARD_PATH[BOARD_PATH.length - 1];

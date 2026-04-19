@@ -155,7 +155,8 @@ describe('GamePage', () => {
     expect(screen.queryByTestId('challenge-modal')).not.toBeInTheDocument();
   });
 
-  it('pawn:done enquanto quiz pendente abre o ChallengeModal', () => {
+  it('pawn:done enquanto quiz pendente NÃO abre modal imediatamente (delay 1s)', () => {
+    vi.useFakeTimers();
     useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
     renderGamePage();
     act(() => {
@@ -167,10 +168,30 @@ describe('GamePage', () => {
       });
     });
     act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
+    expect(screen.queryByTestId('challenge-modal')).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it('pawn:done abre ChallengeModal após delay de 1s', () => {
+    vi.useFakeTimers();
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.QUIZ_QUESTION, {
+        sessionId: 'session-1',
+        playerId: 'p1',
+        question: makeQuestion(),
+        timeoutSeconds: 30,
+      });
+    });
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
+    act(() => { vi.advanceTimersByTime(1000); });
     expect(screen.getByTestId('challenge-modal')).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it('responder quiz emite QUIZ_ANSWER com selectedText da opção clicada', () => {
+    vi.useFakeTimers();
     useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
     renderGamePage();
     act(() => {
@@ -182,6 +203,7 @@ describe('GamePage', () => {
       });
     });
     act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
+    act(() => { vi.advanceTimersByTime(1000); });
     fireEvent.click(screen.getByTestId('challenge-option-0'));
     expect(socket.emit).toHaveBeenCalledWith(EVENTS.QUIZ_ANSWER, expect.objectContaining({
       sessionId: 'session-1',
@@ -189,6 +211,7 @@ describe('GamePage', () => {
       questionId: 'q1',
       selectedText: 'Fornecer gratuitamente',
     }));
+    vi.useRealTimers();
   });
 
   it('GAME_FINISHED não emite camera:victory imediatamente — aguarda pawn:done', () => {
@@ -327,6 +350,7 @@ describe('GamePage', () => {
   });
 
   it('botão Rolar Dado desabilitado enquanto modal de quiz está aberto', () => {
+    vi.useFakeTimers();
     useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1', isMyTurn: true });
     renderGamePage();
     act(() => {
@@ -338,8 +362,10 @@ describe('GamePage', () => {
       });
     });
     act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
+    act(() => { vi.advanceTimersByTime(1000); });
     expect(screen.getByTestId('challenge-modal')).toBeInTheDocument();
     expect(screen.getByTestId('btn-roll-dice')).toBeDisabled();
+    vi.useRealTimers();
   });
 
   it('TURN_RESULT emite dice:result no gameBus com a face do dado', () => {
@@ -364,7 +390,8 @@ describe('GamePage', () => {
 
   // ─── Quiz filtrado (P1) ────────────────────────────────────────────────────
 
-  it('QUIZ_QUESTION com meu playerId abre modal após pawn:done', () => {
+  it('QUIZ_QUESTION com meu playerId abre modal após pawn:done + delay 1s', () => {
+    vi.useFakeTimers();
     useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
     renderGamePage();
     act(() => {
@@ -377,9 +404,13 @@ describe('GamePage', () => {
     });
     // Não abre imediatamente
     expect(screen.queryByTestId('challenge-modal')).not.toBeInTheDocument();
-    // Abre após pawn:done
+    // Não abre logo após pawn:done (delay 1s)
     act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
+    expect(screen.queryByTestId('challenge-modal')).not.toBeInTheDocument();
+    // Abre após o delay
+    act(() => { vi.advanceTimersByTime(1000); });
     expect(screen.getByTestId('challenge-modal')).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it('QUIZ_QUESTION com playerId de outro jogador NÃO abre o ChallengeModal', () => {
