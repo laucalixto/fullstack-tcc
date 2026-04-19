@@ -118,3 +118,114 @@ describe('PawnManager', () => {
     expect(manager.getPawnCount()).toBe(0);
   });
 });
+
+// ─── RED: animação casa a casa ────────────────────────────────────────────────
+// Tiles 9 (y=0.0) → 10 (y=0.5): Δy=0.5 → deve gerar arco de salto
+// Tiles 1 (y=0.0) → 3 (y=0.0): Δy=0  → sem salto (mesma altura)
+
+const STEP_DURATION = 0.12; // deve coincidir com a constante interna
+const PAWN_Y_OFFSET = 0.65;
+
+// Helper: retorna o mesh criado pelo índice de construção (em ordem de addPawn)
+function getMeshAt(index: number) {
+  return (THREE.Mesh as unknown as ReturnType<typeof vi.fn>).mock.results[index].value as {
+    position: { set: ReturnType<typeof vi.fn> };
+  };
+}
+
+describe('PawnManager — animação casa a casa', () => {
+  let scene: THREE.Scene;
+  let manager: PawnManager;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    scene = new THREE.Scene();
+    manager = new PawnManager(scene);
+  });
+
+  it('isAnimating retorna false antes de qualquer animatePawn', () => {
+    manager.addPawn('p1', 0);
+    expect(manager.isAnimating('p1')).toBe(false);
+  });
+
+  it('animatePawn não teleporta imediatamente (position.set não chamado)', () => {
+    manager.addPawn('p1', 0);
+    manager.movePawn('p1', 1); // posiciona primeiro
+    const mesh = getMeshAt(0);
+    mesh.position.set.mockClear();
+
+    manager.animatePawn('p1', 1, 3);
+    expect(mesh.position.set).not.toHaveBeenCalled();
+  });
+
+  it('isAnimating retorna true após animatePawn', () => {
+    manager.addPawn('p1', 0);
+    manager.animatePawn('p1', 0, 3);
+    expect(manager.isAnimating('p1')).toBe(true);
+  });
+
+  it('update chama position.set a cada frame durante animação', () => {
+    manager.addPawn('p1', 0);
+    manager.animatePawn('p1', 0, 2);
+    const mesh = getMeshAt(0);
+    mesh.position.set.mockClear();
+
+    manager.update(STEP_DURATION * 0.5); // meio do 1º passo
+    expect(mesh.position.set).toHaveBeenCalled();
+  });
+
+  it('isAnimating retorna false após completar todos os passos', () => {
+    manager.addPawn('p1', 0);
+    manager.animatePawn('p1', 0, 3); // 3 passos
+
+    manager.update(STEP_DURATION + 0.01); // passo 1 → 2
+    manager.update(STEP_DURATION + 0.01); // passo 2 → 3
+    manager.update(STEP_DURATION + 0.01); // passo 3 → done
+
+    expect(manager.isAnimating('p1')).toBe(false);
+  });
+
+  it('Y é maior que o tile de destino durante transição com mudança de altura (salto)', () => {
+    // Tile 9 (y=0.0) → tile 10 (y=0.5) — Δy=0.5 → deve produzir arco
+    manager.addPawn('p1', 0);
+    manager.movePawn('p1', 9);
+    manager.animatePawn('p1', 9, 10); // 1 passo com Δy=0.5
+    const mesh = getMeshAt(0);
+    mesh.position.set.mockClear();
+
+    manager.update(STEP_DURATION * 0.5); // pico do arco
+    const yDuring = mesh.position.set.mock.calls.at(-1)?.[1] as number;
+
+    // Y deve ser maior que o tile de destino + offset (sem salto seria ≤ 1.15)
+    const destY = 0.5 + PAWN_Y_OFFSET; // 1.15
+    expect(yDuring).toBeGreaterThan(destY);
+  });
+
+  it('Y NÃO sobe acima do tile de destino em transição sem mudança de altura', () => {
+    // Tiles 1 → 3 todos y=0.0 — sem salto
+    manager.addPawn('p1', 0);
+    manager.movePawn('p1', 1);
+    manager.animatePawn('p1', 1, 3); // 2 passos no mesmo nível
+    const mesh = getMeshAt(0);
+    mesh.position.set.mockClear();
+
+    // Avança pelos passos e verifica que Y nunca ultrapassa pawn_offset
+    manager.update(STEP_DURATION * 0.5);
+    manager.update(STEP_DURATION * 0.5);
+
+    const maxY = Math.max(
+      ...(mesh.position.set.mock.calls.map(([, y]: [unknown, number]) => y)),
+    );
+    expect(maxY).toBeLessThanOrEqual(PAWN_Y_OFFSET + 0.01); // tolerância de float
+  });
+
+  it('animatePawn com fromIndex === toIndex não cria animação', () => {
+    manager.addPawn('p1', 0);
+    manager.animatePawn('p1', 5, 5);
+    expect(manager.isAnimating('p1')).toBe(false);
+  });
+
+  it('animatePawn para playerId desconhecido não lança erro', () => {
+    expect(() => manager.animatePawn('ghost', 0, 5)).not.toThrow();
+  });
+});

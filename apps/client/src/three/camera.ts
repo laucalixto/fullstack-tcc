@@ -5,11 +5,22 @@ const ISO_OFFSET      = new THREE.Vector3(8, 10, 8);
 const DICE_ISO_OFFSET = new THREE.Vector3(4,  5,  4); // close-up para zona do dado
 const LERP_FACTOR = 0.03;
 
+// Órbita de vitória — câmera gira em torno do campeão
+const VICTORY_RADIUS = 2.5;  // distância horizontal ao peão
+const VICTORY_HEIGHT = 1.8;  // elevação acima do tile
+const ORBIT_SPEED    = 0.8;  // rad/s
+
 export class CameraController {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
   private lastInteractionTime = 0;
   private isReturning = false;
+
+  // Estado da câmera de vitória
+  private victoryMode = false;
+  private readonly victoryTarget = new THREE.Vector3();
+  private victoryAngle = 0;
+  private victoryStartTime = 0;
 
   readonly RETURN_DELAY_MS = 4_000;
 
@@ -24,12 +35,46 @@ export class CameraController {
   }
 
   update(activeTilePosition: THREE.Vector3): void {
+    if (this.victoryMode) {
+      // Órbita lenta em torno do peão campeão
+      const elapsed = (Date.now() - this.victoryStartTime) / 1000;
+      const angle = this.victoryAngle + elapsed * ORBIT_SPEED;
+      this.camera.position.set(
+        this.victoryTarget.x + VICTORY_RADIUS * Math.cos(angle),
+        this.victoryTarget.y + VICTORY_HEIGHT,
+        this.victoryTarget.z + VICTORY_RADIUS * Math.sin(angle),
+      );
+      this.controls.target.copy(this.victoryTarget);
+      this.controls.update();
+      return;
+    }
+
     this.controls.update();
 
     const idle = Date.now() - this.lastInteractionTime;
     if (idle > this.RETURN_DELAY_MS) {
       this.returnToActivePawn(activeTilePosition);
     }
+  }
+
+  /**
+   * Ativa câmera cinematográfica de vitória: zoom próximo + órbita ao redor do campeão.
+   * Chamado quando GAME_FINISHED é recebido.
+   */
+  zoomToVictory(target: THREE.Vector3): void {
+    this.victoryMode = true;
+    this.victoryTarget.copy(target);
+    this.victoryStartTime = Date.now();
+    this.victoryAngle = Math.PI * 0.25; // ângulo inicial (45°)
+
+    // Posição inicial do close-up
+    this.camera.position.set(
+      target.x + VICTORY_RADIUS * Math.cos(this.victoryAngle),
+      target.y + VICTORY_HEIGHT,
+      target.z + VICTORY_RADIUS * Math.sin(this.victoryAngle),
+    );
+    this.controls.target.copy(target);
+    this.controls.update();
   }
 
   /** Retorno suave ao peão ativo após inatividade. */

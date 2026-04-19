@@ -180,3 +180,83 @@ describe('WebSocket sync — integração', () => {
     expect(error.code).toBe('NOT_YOUR_TURN');
   }, 8000);
 });
+
+// ─── RED: quiz:question deve ir APENAS ao jogador da vez ─────────────────────
+// Bug: io.to(sessionId).emit(QUIZ_QUESTION) → broadcast para todos os jogadores.
+// Correto: socket.emit → somente o jogador que rolou recebe a pergunta.
+
+describe('WebSocket sync — quiz:question direcionado', () => {
+  let httpServer: HttpServer;
+  let port: number;
+  let clients: ClientSocket[];
+
+  // rollDiceFn = 5: posição 0 + 5 = tile 5 = casa de quiz
+  beforeEach(async () => {
+    clients = [];
+    httpServer = createServer();
+    attachSocketIO(httpServer, new SessionManager({ rollDiceFn: () => 5 }));
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    port = (httpServer.address() as AddressInfo).port;
+  });
+
+  afterEach(async () => {
+    for (const c of clients) c.disconnect();
+    await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+  });
+
+  function connect(): Promise<ClientSocket> {
+    return new Promise((resolve) => {
+      const c = ioClient(`http://127.0.0.1:${port}`, { autoConnect: false });
+      clients.push(c);
+      c.once('connect', () => resolve(c));
+      c.connect();
+    });
+  }
+
+  it('quiz:question chega apenas ao jogador ativo — outros jogadores NÃO recebem', async () => {
+    const fac = await connect();
+    const p1  = await connect();
+    const p2  = await connect();
+
+    // Criar sala e entrar com p1 e p2
+    const [sessionState] = await Promise.all([
+      waitFor<GameSession>(fac, EVENTS.GAME_STATE),
+      Promise.resolve(fac.emit(EVENTS.ROOM_CREATE, { facilitatorId: 'fac-1' })),
+    ]);
+
+    const [, p1Joined] = await Promise.all([
+      waitFor<GameSession>(p1, EVENTS.GAME_STATE),
+      waitFor<{ playerId: string }>(p1, EVENTS.ROOM_JOINED),
+      Promise.resolve(p1.emit(EVENTS.ROOM_JOIN, { pin: sessionState.pin, playerName: 'P1' })),
+    ]);
+
+    await Promise.all([
+      waitFor<GameSession>(p2, EVENTS.GAME_STATE),
+      waitFor<{ playerId: string }>(p2, EVENTS.ROOM_JOINED),
+      Promise.resolve(p2.emit(EVENTS.ROOM_JOIN, { pin: sessionState.pin, playerName: 'P2' })),
+    ]);
+
+    // Iniciar jogo
+    await Promise.all([
+      waitFor(p1, EVENTS.GAME_STATE),
+      waitFor(p1, EVENTS.TURN_CHANGED),
+      Promise.resolve(fac.emit(EVENTS.GAME_START, { sessionId: sessionState.id })),
+    ]);
+
+    // Monitorar se p2 recebe QUIZ_QUESTION (não deveria)
+    let p2ReceivedQuiz = false;
+    p2.on(EVENTS.QUIZ_QUESTION, () => { p2ReceivedQuiz = true; });
+
+    // p1 rola dado → tile 5 = casa de quiz → p1 deve receber QUIZ_QUESTION
+    const [quiz] = await Promise.all([
+      waitFor<{ playerId: string; question: unknown }>(p1, EVENTS.QUIZ_QUESTION),
+      Promise.resolve(p1.emit(EVENTS.TURN_ROLL, { sessionId: sessionState.id, playerId: p1Joined.playerId })),
+    ]);
+
+    // Aguarda um tick para garantir que p2 teria recebido se fosse broadcast
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(quiz.playerId).toBe(p1Joined.playerId);
+    expect(p2ReceivedQuiz).toBe(false);
+  }, 8000);
+});

@@ -2,9 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ─── vi.hoisted: variáveis disponíveis antes das factories dos mocks ──────────
 const pawnMock = vi.hoisted(() => ({
-  addPawn: vi.fn(),
-  movePawn: vi.fn(),
-  removePawn: vi.fn(),
+  addPawn:     vi.fn(),
+  movePawn:    vi.fn(),
+  removePawn:  vi.fn(),
+  animatePawn: vi.fn(),
+  isAnimating: vi.fn(() => false),
+  update:      vi.fn(),
 }));
 
 // ─── Mocks Three.js (sem WebGL) ──────────────────────────────────────────────
@@ -80,6 +83,7 @@ vi.mock('../../three/camera', () => ({
     update: vi.fn(),
     snapToPlayer: vi.fn(),
     panToDice: vi.fn(),
+    zoomToVictory: vi.fn(),
   })),
 }));
 
@@ -87,22 +91,6 @@ vi.mock('../../three/PawnManager', () => ({
   PawnManager: vi.fn(() => pawnMock),
 }));
 
-vi.mock('cannon-es', () => ({
-  World:          vi.fn().mockImplementation(() => ({
-    addBody: vi.fn(), removeBody: vi.fn(), step: vi.fn(), bodies: [],
-    broadphase: null,
-  })),
-  Body:           vi.fn().mockImplementation(() => ({
-    position: { set: vi.fn(), x: 0, y: 0, z: 0 },
-    velocity: { set: vi.fn(), setZero: vi.fn() },
-    angularVelocity: { set: vi.fn(), setZero: vi.fn() },
-    quaternion: { x: 0, y: 0, z: 0, w: 1, setFromEuler: vi.fn() },
-  })),
-  Box:            vi.fn(),
-  Vec3:           vi.fn(() => ({ x: 0, y: 0, z: 0 })),
-  Plane:          vi.fn(),
-  NaiveBroadphase: vi.fn(),
-}));
 
 vi.mock('../../three/dice/DicePhysics', () => ({
   DicePhysics: vi.fn().mockImplementation(() => ({
@@ -155,10 +143,11 @@ describe('scene — gameBus → PawnManager', () => {
     expect(pawnMock.addPawn).toHaveBeenCalledTimes(1);
   });
 
-  it('players:sync move peão quando jogador já é conhecido', () => {
+  it('players:sync anima peão quando posição do jogador já conhecido muda', () => {
     gameBus.emit('players:sync', [makePlayer('p1', 0)]);
     gameBus.emit('players:sync', [makePlayer('p1', 8)]);
-    expect(pawnMock.movePawn).toHaveBeenLastCalledWith('p1', 8);
+    // Posição mudou de 0 → 8: deve animar, não teleportar
+    expect(pawnMock.animatePawn).toHaveBeenCalledWith('p1', 0, 8);
   });
 
   it('players:sync com múltiplos jogadores adiciona todos com colorIndex correto', () => {
@@ -233,5 +222,64 @@ describe('scene — câmera e dado', () => {
     cameraCtrl.snapToPlayer.mockClear();
     gameBus.emit('active:player', { tileIndex: 8 });
     expect(cameraCtrl.snapToPlayer).toHaveBeenCalled();
+  });
+
+  it('camera:victory chama zoomToVictory na câmera', () => {
+    gameBus.emit('camera:victory', {});
+    expect(cameraCtrl.zoomToVictory).toHaveBeenCalled();
+  });
+});
+
+// ─── RED: animação de peões — players:sync anima em vez de teleportar ─────────
+// Quando players:sync chega com posição diferente da armazenada → animatePawn
+// Quando chega pela primeira vez (jogador novo) → movePawn (posição inicial)
+
+import type { Player } from '@safety-board/shared';
+
+describe('scene — animação de peões (players:sync)', () => {
+  let container: HTMLDivElement;
+  let cleanup: () => void;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth',  { get: () => 800, configurable: true });
+    Object.defineProperty(container, 'clientHeight', { get: () => 600, configurable: true });
+    cleanup = initThreeScene(container);
+  });
+
+  afterEach(() => {
+    try { cleanup(); } catch { /* já limpo */ }
+  });
+
+  const makePlayer = (id: string, position = 0): Player => ({
+    id, name: id, position, score: 0, isConnected: true,
+  });
+
+  it('primeiro players:sync para um jogador chama movePawn (não animatePawn)', () => {
+    gameBus.emit('players:sync', [makePlayer('p1', 0)]);
+    expect(pawnMock.movePawn).toHaveBeenCalledWith('p1', 0);
+    expect(pawnMock.animatePawn).not.toHaveBeenCalled();
+  });
+
+  it('players:sync com posição alterada chama animatePawn com fromIndex e toIndex', () => {
+    // Sync inicial: posição 0
+    gameBus.emit('players:sync', [makePlayer('p1', 0)]);
+    pawnMock.animatePawn.mockClear();
+
+    // Segunda sync: posição mudou para 4
+    gameBus.emit('players:sync', [makePlayer('p1', 4)]);
+    expect(pawnMock.animatePawn).toHaveBeenCalledWith('p1', 0, 4);
+  });
+
+  it('players:sync com mesma posição NÃO chama animatePawn', () => {
+    gameBus.emit('players:sync', [makePlayer('p1', 3)]);
+    pawnMock.animatePawn.mockClear();
+    pawnMock.movePawn.mockClear();
+
+    // Posição não mudou
+    gameBus.emit('players:sync', [makePlayer('p1', 3)]);
+    expect(pawnMock.animatePawn).not.toHaveBeenCalled();
+    expect(pawnMock.movePawn).not.toHaveBeenCalled();
   });
 });

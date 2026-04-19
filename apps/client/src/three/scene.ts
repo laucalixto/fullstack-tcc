@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { BOARD_PATH } from '@safety-board/shared';
 import type { Player } from '@safety-board/shared';
@@ -71,7 +70,9 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   // PawnManager
   const pawnManager = new PawnManager(scene);
-  const knownPlayers = new Set<string>();
+  const knownPlayers  = new Set<string>();
+  // Última posição conhecida de cada jogador — para calcular from/to da animação
+  const pawnPositions = new Map<string, number>();
 
   // Posição do peão ativo — câmera segue este ponto quando ocioso
   const activePos = new THREE.Vector3(BOARD_PATH[0].x, BOARD_PATH[0].y, BOARD_PATH[0].z);
@@ -79,32 +80,28 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   // Enquanto true, active:player não redireciona a câmera (dado ainda rola)
   let diceRolling = false;
 
-  // ─── Physics World (cannon-es) ─────────────────────────────────────────────
-
-  const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
-  world.broadphase = new CANNON.NaiveBroadphase();
-
-  // Plano de colisão invisível na zona do dado
-  const floorBody = new CANNON.Body({
-    mass: 0,
-    shape: new CANNON.Plane(),
-    position: new CANNON.Vec3(DICE_ZONE.x, DICE_ZONE.y - 0.5, DICE_ZONE.z),
-  });
-  floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-  world.addBody(floorBody);
-
-  // DicePhysics — cubo físico na zona de rolagem
-  const dicePhysics = new DicePhysics(scene, world);
+  // DicePhysics — animação tween pura na zona de rolagem
+  const dicePhysics = new DicePhysics(scene);
 
   // ─── gameBus — peões ────────────────────────────────────────────────────────
 
   const unsubPlayers = gameBus.on<Player[]>('players:sync', (players) => {
     players.forEach((player, i) => {
       if (!knownPlayers.has(player.id)) {
+        // Jogador novo: adiciona peão e teleporta para posição inicial
         pawnManager.addPawn(player.id, i);
         knownPlayers.add(player.id);
+        pawnManager.movePawn(player.id, player.position);
+        pawnPositions.set(player.id, player.position);
+      } else {
+        const oldPos = pawnPositions.get(player.id) ?? player.position;
+        if (oldPos !== player.position) {
+          // Posição mudou: anima tile a tile
+          pawnManager.animatePawn(player.id, oldPos, player.position);
+          pawnPositions.set(player.id, player.position);
+        }
+        // Posição igual: nada a fazer
       }
-      pawnManager.movePawn(player.id, player.position);
     });
   });
 
@@ -135,6 +132,14 @@ export function initThreeScene(container: HTMLDivElement): () => void {
     diceRolling = false;
     // Retorna câmera ao peão ativo (já atualizado pelo active:player durante o roll)
     cameraController.snapToPlayer(activePos);
+  });
+
+  // Tile final do tabuleiro — alvo do zoom de vitória
+  const finishTile = BOARD_PATH[BOARD_PATH.length - 1];
+  const finishPos = new THREE.Vector3(finishTile.x, finishTile.y, finishTile.z);
+
+  const unsubVictory = gameBus.on('camera:victory', () => {
+    cameraController.zoomToVictory(finishPos);
   });
 
   // ─── Board tiles com variação de cor ───────────────────────────────────────
@@ -169,6 +174,7 @@ export function initThreeScene(container: HTMLDivElement): () => void {
     animId = requestAnimationFrame(animate);
     const delta = clock.getDelta();
     dicePhysics.update(delta);
+    pawnManager.update(delta);
     cameraController.update(activePos);
     renderer.render(scene, camera);
   }
@@ -196,6 +202,7 @@ export function initThreeScene(container: HTMLDivElement): () => void {
     unsubDiceThrow();
     unsubDiceResult();
     unsubDiceDone();
+    unsubVictory();
     dicePhysics.dispose();
     controls.dispose();
     renderer.dispose();

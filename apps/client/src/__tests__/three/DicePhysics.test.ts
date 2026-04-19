@@ -1,48 +1,51 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// ─── RED: DicePhysics — máquina de estados do dado ────────────────────────────
-// idle → simulating (1.5s cannon-es) → snapping (0.3s lerp) → done
-// gameBus 'dice:done' emitido ao completar snap
+// ─── RED: DicePhysics — animação de tween sem cannon-es ───────────────────────
+// idle → spinning (rotação rápida + queda) → decelerating (easeOut → face correta) → done
+// gameBus 'dice:done' emitido ao completar a desaceleração
 
-const { mockWorld, mockBody, mockMesh } = vi.hoisted(() => {
-  const mockWorld = {
-    addBody: vi.fn(),
-    removeBody: vi.fn(),
-    step: vi.fn(),
-    bodies: [] as unknown[],
-  };
-  const mockBody = {
-    position: { set: vi.fn(), x: 0, y: 0, z: 0 },
-    velocity: { set: vi.fn(), setZero: vi.fn() },
-    angularVelocity: { set: vi.fn(), setZero: vi.fn() },
-    quaternion: { x: 0, y: 0, z: 0, w: 1 },
-  };
+const { mockMesh } = vi.hoisted(() => {
   const mockMesh = {
     castShadow: false,
     visible: false,
-    position: { set: vi.fn(), x: 0, y: 0, z: 0 },
-    quaternion: { set: vi.fn(), slerpQuaternions: vi.fn(), x: 0, y: 0, z: 0, w: 1 },
+    position: {
+      set: vi.fn(),
+      x: 0, y: 0, z: 0,
+      copy: vi.fn(),
+    },
+    quaternion: {
+      set: vi.fn(),
+      slerpQuaternions: vi.fn(),
+      premultiply: vi.fn(),
+      copy: vi.fn(),
+      x: 0, y: 0, z: 0, w: 1,
+    },
   };
-  return { mockWorld, mockBody, mockMesh };
+  return { mockMesh };
 });
-
-vi.mock('cannon-es', () => ({
-  World:  vi.fn(() => mockWorld),
-  Body:   vi.fn(() => mockBody),
-  Box:    vi.fn(),
-  Vec3:   vi.fn(() => ({ x: 0, y: 0, z: 0 })),
-}));
 
 vi.mock('../../three/EventBus', () => ({
   gameBus: { emit: vi.fn(), on: vi.fn(() => vi.fn()) },
 }));
 
 vi.mock('three', () => ({
-  Mesh:                 vi.fn(() => mockMesh),
-  BoxGeometry:          vi.fn(),
+  Mesh: vi.fn(() => mockMesh),
+  BoxGeometry: vi.fn(),
   MeshStandardMaterial: vi.fn(),
-  Quaternion:           vi.fn(() => ({ x: 0, y: 0, z: 0, w: 1 })),
-  Euler:                vi.fn(),
+  Vector3: vi.fn().mockImplementation((x = 0, y = 0, z = 0) => ({
+    x, y, z,
+    set: vi.fn().mockReturnThis(),
+    normalize: vi.fn().mockReturnThis(),
+    copy: vi.fn().mockReturnThis(),
+  })),
+  Quaternion: vi.fn().mockImplementation(() => ({
+    setFromAxisAngle: vi.fn().mockReturnThis(),
+    slerpQuaternions: vi.fn().mockReturnThis(),
+    premultiply: vi.fn().mockReturnThis(),
+    copy: vi.fn().mockReturnThis(),
+    x: 0, y: 0, z: 0, w: 1,
+  })),
+  Euler: vi.fn(),
 }));
 
 vi.mock('../../three/dice/faceRotations', () => ({
@@ -53,35 +56,41 @@ vi.mock('../../three/dice/faceRotations', () => ({
 
 import { DicePhysics } from '../../three/dice/DicePhysics';
 import { gameBus } from '../../three/EventBus';
-import * as CANNON from 'cannon-es';
 
 const DICE_POS = { x: 12, y: 0.5, z: 4 };
 
-describe('DicePhysics', () => {
+// Duração dos estados (deve coincidir com as constantes internas)
+const SPIN_DURATION  = 1.2; // segundos de rotação rápida
+const DECEL_DURATION = 0.8; // segundos de desaceleração até a face correta
+
+describe('DicePhysics — tween sem cannon-es', () => {
   let scene: { add: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
-  let world: InstanceType<typeof CANNON.World>;
   let dp: DicePhysics;
 
   beforeEach(() => {
     scene = { add: vi.fn(), remove: vi.fn() };
-    world = new CANNON.World();
-    vi.mocked(mockWorld.addBody).mockClear();
-    vi.mocked(mockWorld.removeBody).mockClear();
-    vi.mocked(mockWorld.step).mockClear();
     vi.mocked(gameBus.emit).mockClear();
+    vi.mocked(mockMesh.quaternion.premultiply).mockClear();
+    vi.mocked(mockMesh.quaternion.slerpQuaternions).mockClear();
     mockMesh.visible = false;
-    dp = new DicePhysics(scene as never, world);
+    dp = new DicePhysics(scene as never);
   });
 
-  // ─── Estados ───────────────────────────────────────────────────────────────
+  // ─── Estado inicial ────────────────────────────────────────────────────────
 
   it('estado inicial é idle', () => {
     expect(dp.state).toBe('idle');
   });
 
-  it('throw() muda estado para simulating', () => {
+  it('adiciona o mesh à cena ao construir', () => {
+    expect(scene.add).toHaveBeenCalledWith(mockMesh);
+  });
+
+  // ─── throw() ──────────────────────────────────────────────────────────────
+
+  it('throw() muda estado para spinning', () => {
     dp.throw(DICE_POS);
-    expect(dp.state).toBe('simulating');
+    expect(dp.state).toBe('spinning');
   });
 
   it('throw() torna o dado visível', () => {
@@ -89,88 +98,97 @@ describe('DicePhysics', () => {
     expect(mockMesh.visible).toBe(true);
   });
 
-  it('throw() adiciona body ao world', () => {
+  it('throw() posiciona o dado acima da zona', () => {
     dp.throw(DICE_POS);
-    expect(mockWorld.addBody).toHaveBeenCalledWith(mockBody);
+    expect(mockMesh.position.set).toHaveBeenCalledWith(
+      DICE_POS.x,
+      expect.any(Number), // y + offset
+      DICE_POS.z,
+    );
   });
 
-  it('update() chama world.step enquanto simulating', () => {
-    dp.throw(DICE_POS);
-    dp.update(0.016);
-    expect(mockWorld.step).toHaveBeenCalled();
-  });
+  // ─── setResult() ──────────────────────────────────────────────────────────
 
-  // ─── setResult ─────────────────────────────────────────────────────────────
-
-  it('setResult() armazena a face para snap posterior', () => {
+  it('setResult() armazena a face pendente', () => {
     dp.throw(DICE_POS);
     dp.setResult(3);
     expect(dp.pendingFace).toBe(3);
   });
 
-  // ─── Transições de estado ──────────────────────────────────────────────────
+  // ─── Spinning ─────────────────────────────────────────────────────────────
 
-  it('permanece em simulating antes de SIMULATING_DURATION', () => {
+  it('update() gira o mesh via premultiply durante spinning', () => {
+    dp.throw(DICE_POS);
+    dp.update(0.016);
+    expect(mockMesh.quaternion.premultiply).toHaveBeenCalled();
+  });
+
+  it('permanece em spinning antes de SPIN_DURATION', () => {
     dp.throw(DICE_POS);
     dp.setResult(5);
-    dp.update(1.0); // < 1.5s
-    expect(dp.state).toBe('simulating');
+    dp.update(SPIN_DURATION - 0.1);
+    expect(dp.state).toBe('spinning');
   });
 
-  it('transita para snapping após SIMULATING_DURATION com pendingFace definido', () => {
+  it('NÃO transita para decelerating se pendingFace ainda é null', () => {
+    dp.throw(DICE_POS);
+    dp.update(SPIN_DURATION + 0.1);
+    expect(dp.state).toBe('spinning');
+  });
+
+  it('transita para decelerating após SPIN_DURATION com pendingFace definido', () => {
     dp.throw(DICE_POS);
     dp.setResult(4);
-    dp.update(1.6); // > 1.5s
-    expect(dp.state).toBe('snapping');
+    dp.update(SPIN_DURATION + 0.1);
+    expect(dp.state).toBe('decelerating');
   });
 
-  it('NÃO transita para snapping se pendingFace ainda é null', () => {
+  // ─── Decelerating ─────────────────────────────────────────────────────────
+
+  it('permanece em decelerating antes de DECEL_DURATION', () => {
     dp.throw(DICE_POS);
-    dp.update(2.0); // > 1.5s mas sem setResult
-    expect(dp.state).toBe('simulating');
+    dp.setResult(6);
+    dp.update(SPIN_DURATION + 0.1); // → decelerating
+    dp.update(DECEL_DURATION - 0.1);
+    expect(dp.state).toBe('decelerating');
   });
 
-  it('transita para done e emite dice:done após snapping completar', () => {
+  it('usa slerpQuaternions durante decelerating', () => {
     dp.throw(DICE_POS);
     dp.setResult(2);
-    dp.update(1.6); // → snapping
-    dp.update(0.4); // > 0.3s → done
+    dp.update(SPIN_DURATION + 0.1); // → decelerating
+    dp.update(0.1);
+    expect(mockMesh.quaternion.slerpQuaternions).toHaveBeenCalled();
+  });
+
+  it('transita para done e emite dice:done ao completar decelerating', () => {
+    dp.throw(DICE_POS);
+    dp.setResult(2);
+    dp.update(SPIN_DURATION + 0.1); // → decelerating
+    dp.update(DECEL_DURATION + 0.1); // → done
     expect(dp.state).toBe('done');
     expect(gameBus.emit).toHaveBeenCalledWith('dice:done', { face: 2 });
   });
 
-  it('permanece em snapping antes de SNAPPING_DURATION', () => {
-    dp.throw(DICE_POS);
-    dp.setResult(6);
-    dp.update(1.6); // → snapping
-    dp.update(0.1); // < 0.3s
-    expect(dp.state).toBe('snapping');
-  });
-
-  it('remove o body do world ao completar', () => {
-    dp.throw(DICE_POS);
-    dp.setResult(1);
-    dp.update(1.6);
-    dp.update(0.4);
-    expect(mockWorld.removeBody).toHaveBeenCalledWith(mockBody);
-  });
-
   // ─── Idle / Done não fazem nada ────────────────────────────────────────────
 
-  it('update() não invoca world.step no estado idle', () => {
+  it('update() não gira o mesh no estado idle', () => {
     dp.update(1.0);
-    expect(mockWorld.step).not.toHaveBeenCalled();
+    expect(mockMesh.quaternion.premultiply).not.toHaveBeenCalled();
     expect(dp.state).toBe('idle');
   });
 
-  it('update() não invoca world.step no estado done', () => {
+  it('update() não faz nada no estado done', () => {
     dp.throw(DICE_POS);
     dp.setResult(3);
-    dp.update(1.6);
-    dp.update(0.4); // → done
-    vi.mocked(mockWorld.step).mockClear();
+    dp.update(SPIN_DURATION + 0.1);
+    dp.update(DECEL_DURATION + 0.1); // → done
+    vi.mocked(mockMesh.quaternion.premultiply).mockClear();
+    vi.mocked(mockMesh.quaternion.slerpQuaternions).mockClear();
+    vi.mocked(gameBus.emit).mockClear();
     dp.update(1.0);
-    expect(mockWorld.step).not.toHaveBeenCalled();
+    expect(mockMesh.quaternion.premultiply).not.toHaveBeenCalled();
+    expect(gameBus.emit).not.toHaveBeenCalled();
   });
 
   // ─── dispose ───────────────────────────────────────────────────────────────
@@ -180,10 +198,9 @@ describe('DicePhysics', () => {
     expect(scene.remove).toHaveBeenCalledWith(mockMesh);
   });
 
-  it('dispose() remove body do world se ainda estiver ativo', () => {
+  it('dispose() não depende de cannon-es (sem removeBody)', () => {
+    // Nenhum "world" é passado ao construtor nem ao dispose — se compilar, passou
     dp.throw(DICE_POS);
-    mockWorld.bodies = [mockBody]; // simula body no world
-    dp.dispose();
-    expect(mockWorld.removeBody).toHaveBeenCalledWith(mockBody);
+    expect(() => dp.dispose()).not.toThrow();
   });
 });

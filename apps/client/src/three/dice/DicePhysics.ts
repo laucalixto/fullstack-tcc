@@ -1,36 +1,59 @@
 import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
 import { gameBus } from '../EventBus';
 import { FACE_QUATERNIONS } from './faceRotations';
 
-export type DiceState = 'idle' | 'simulating' | 'snapping' | 'done';
+export type DiceState = 'idle' | 'spinning' | 'decelerating' | 'done';
 
 // Posição fixa da zona de rolagem — à direita do tabuleiro
 export const DICE_ZONE = { x: 12, y: 0.5, z: 4 } as const;
 
-const SIMULATING_DURATION = 1.5; // segundos de física livre
-const SNAPPING_DURATION   = 0.3; // segundos de lerp para face correta
+const SPIN_DURATION  = 1.2; // segundos de rotação rápida + queda
+const DECEL_DURATION = 0.8; // segundos de desaceleração suave até face correta
+const SPIN_SPEED     = 15;  // rad/s durante a fase spinning
+const DROP_HEIGHT    = 2.5; // metros acima da zona
+
+// Easing functions
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function easeOutBounce(t: number): number {
+  const n1 = 7.5625;
+  const d1 = 2.75;
+  if (t < 1 / d1)        return n1 * t * t;
+  if (t < 2 / d1)        return n1 * (t -= 1.5 / d1) * t + 0.75;
+  if (t < 2.5 / d1)      return n1 * (t -= 2.25 / d1) * t + 0.9375;
+  return n1 * (t -= 2.625 / d1) * t + 0.984375;
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
 
 export class DicePhysics {
   state: DiceState = 'idle';
   pendingFace: number | null = null;
 
   private readonly mesh: THREE.Mesh;
-  private readonly body: CANNON.Body;
-  private readonly world: CANNON.World;
   private readonly scene: THREE.Scene;
 
-  private simulatingTimer = 0;
-  private snappingTimer   = 0;
-  // valores da quaternion no início do snap (para interpolação)
-  private snapFromQ = { x: 0, y: 0, z: 0, w: 1 };
+  private spinTimer   = 0;
+  private decelTimer  = 0;
 
-  constructor(scene: THREE.Scene, world: CANNON.World) {
+  // Eixo de rotação aleatório para a fase spinning
+  private readonly spinAxis = new THREE.Vector3(1, 0, 0);
+
+  // Quaternion no início da desaceleração (ponto de partida do slerp)
+  private readonly startQ = new THREE.Quaternion();
+
+  // Posição Y: queda da altura DROP_HEIGHT até o chão da zona
+  private startY  = 0;
+  private targetY = 0;
+
+  constructor(scene: THREE.Scene) {
     this.scene = scene;
-    this.world = world;
 
-    // Mesh — cubo branco simples (face textures podem ser adicionadas depois)
-    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const geo  = new THREE.BoxGeometry(1, 1, 1);
     const mats = Array.from({ length: 6 }, () =>
       new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.3, metalness: 0.1 }),
     );
@@ -38,96 +61,77 @@ export class DicePhysics {
     this.mesh.castShadow = true;
     this.mesh.visible = false;
     scene.add(this.mesh);
-
-    // Corpo físico (ainda não adicionado ao world — adicionado no throw)
-    const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
-    this.body = new CANNON.Body({ mass: 1, shape });
   }
 
-  /** Lança o dado na posição informada com velocidade/spin aleatórios. */
+  /** Lança o dado na posição informada iniciando a animação de tween. */
   throw(position: { x: number; y: number; z: number }): void {
-    this.state = 'simulating';
-    this.simulatingTimer = 0;
+    this.state = 'spinning';
+    this.spinTimer = 0;
     this.pendingFace = null;
 
-    this.body.position.set(position.x, position.y + 2, position.z);
-    this.body.velocity.set(
-      (Math.random() - 0.5) * 3,
-      -2,
-      (Math.random() - 0.5) * 3,
-    );
-    this.body.angularVelocity.set(
-      Math.random() * 12 - 6,
-      Math.random() * 12 - 6,
-      Math.random() * 12 - 6,
-    );
+    // Eixo de spin aleatório para cada lançamento
+    this.spinAxis.set(
+      Math.random() - 0.5,
+      Math.random() - 0.5,
+      Math.random() - 0.5,
+    ).normalize();
 
-    this.world.addBody(this.body);
+    this.startY  = position.y + DROP_HEIGHT;
+    this.targetY = position.y;
+
+    this.mesh.position.set(position.x, this.startY, position.z);
+    this.mesh.quaternion.set(0, 0, 0, 1);
     this.mesh.visible = true;
   }
 
-  /** Recebe o resultado autoritativo do servidor para snap posterior. */
+  /** Recebe o resultado autoritativo do servidor para alinhar ao completar. */
   setResult(face: number): void {
     this.pendingFace = face;
   }
 
-  /** Chamado a cada frame com o delta em segundos. */
+  /** Chamado a cada frame com delta em segundos. */
   update(delta: number): void {
     if (this.state === 'idle' || this.state === 'done') return;
 
-    if (this.state === 'simulating') {
-      this.world.step(1 / 60, delta, 3);
+    if (this.state === 'spinning') {
+      this.spinTimer += delta;
 
-      // Sincroniza posição/rotação do mesh com o corpo físico
-      const { x: px, y: py, z: pz } = this.body.position;
-      this.mesh.position.set(px, py, pz);
+      // Gira o dado em torno do eixo aleatório a velocidade constante
+      const dq = new THREE.Quaternion().setFromAxisAngle(this.spinAxis, SPIN_SPEED * delta);
+      this.mesh.quaternion.premultiply(dq);
 
-      const { x: qx, y: qy, z: qz, w: qw } = this.body.quaternion;
-      this.mesh.quaternion.set(qx, qy, qz, qw);
+      // Queda com bounce suave: startY → targetY
+      const t = Math.min(this.spinTimer / SPIN_DURATION, 1);
+      this.mesh.position.y = lerp(this.startY, this.targetY, easeOutBounce(t));
 
-      this.simulatingTimer += delta;
-      if (this.simulatingTimer >= SIMULATING_DURATION && this.pendingFace !== null) {
-        this.beginSnap();
+      if (this.spinTimer >= SPIN_DURATION && this.pendingFace !== null) {
+        this.beginDecel();
       }
       return;
     }
 
-    if (this.state === 'snapping') {
-      this.snappingTimer += delta;
-      const t = Math.min(this.snappingTimer / SNAPPING_DURATION, 1);
+    if (this.state === 'decelerating') {
+      this.decelTimer += delta;
+      const t = Math.min(this.decelTimer / DECEL_DURATION, 1);
 
-      const qFrom = new THREE.Quaternion(
-        this.snapFromQ.x, this.snapFromQ.y, this.snapFromQ.z, this.snapFromQ.w,
-      );
+      // Slerp suavizado: easeOutCubic faz a rotação desacelerar até parar
       const qTarget = FACE_QUATERNIONS[this.pendingFace!];
-      this.mesh.quaternion.slerpQuaternions(qFrom, qTarget, t);
+      this.mesh.quaternion.slerpQuaternions(this.startQ, qTarget, easeOutCubic(t));
 
       if (t >= 1) {
         this.state = 'done';
-        this.world.removeBody(this.body);
         gameBus.emit('dice:done', { face: this.pendingFace });
       }
     }
   }
 
   dispose(): void {
-    if (this.world.bodies.includes(this.body)) {
-      this.world.removeBody(this.body);
-    }
     this.scene.remove(this.mesh);
   }
 
-  private beginSnap(): void {
-    this.state = 'snapping';
-    this.snappingTimer = 0;
-    this.body.velocity.setZero();
-    this.body.angularVelocity.setZero();
-    // Captura quaternion atual como ponto de partida do lerp
-    this.snapFromQ = {
-      x: this.mesh.quaternion.x,
-      y: this.mesh.quaternion.y,
-      z: this.mesh.quaternion.z,
-      w: this.mesh.quaternion.w,
-    };
+  private beginDecel(): void {
+    this.state = 'decelerating';
+    this.decelTimer = 0;
+    this.startQ.copy(this.mesh.quaternion);
   }
 }

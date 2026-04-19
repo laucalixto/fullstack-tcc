@@ -169,7 +169,7 @@ describe('GamePage', () => {
     }));
   });
 
-  it('GAME_FINISHED navega para /podio', () => {
+  it('GAME_FINISHED emite camera:victory no gameBus', () => {
     renderGamePage();
     act(() => {
       triggerSocket(EVENTS.GAME_FINISHED, {
@@ -178,7 +178,25 @@ describe('GamePage', () => {
         durationSeconds: 120,
       });
     });
+    expect(gameBus.emit).toHaveBeenCalledWith('camera:victory', expect.anything());
+  });
+
+  it('GAME_FINISHED navega para /podio após delay de câmera', () => {
+    vi.useFakeTimers();
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.GAME_FINISHED, {
+        sessionId: 'session-1',
+        players: [],
+        durationSeconds: 120,
+      });
+    });
+    // Ainda não navegou (câmera está animando)
+    expect(mockNavigate).not.toHaveBeenCalledWith('/podio');
+    // Avança o timer
+    act(() => { vi.runAllTimers(); });
     expect(mockNavigate).toHaveBeenCalledWith('/podio');
+    vi.useRealTimers();
   });
 
   it('InactivityTimer renderizado no turno do jogador', () => {
@@ -241,5 +259,35 @@ describe('GamePage', () => {
     renderGamePage();
     act(() => { triggerSocket(EVENTS.TURN_RESULT, { playerId: 'p1', dice: 4, newPosition: 4 }); });
     expect(gameBus.emit).toHaveBeenCalledWith('dice:result', { face: 4 });
+  });
+
+  // ─── Quiz filtrado (P1) ────────────────────────────────────────────────────
+
+  it('QUIZ_QUESTION com meu playerId abre o ChallengeModal', () => {
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.QUIZ_QUESTION, {
+        sessionId: 'session-1',
+        playerId: 'p1',
+        question: makeQuestion(),
+        timeoutSeconds: 30,
+      });
+    });
+    expect(screen.getByTestId('challenge-modal')).toBeInTheDocument();
+  });
+
+  it('QUIZ_QUESTION com playerId de outro jogador NÃO abre o ChallengeModal', () => {
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.QUIZ_QUESTION, {
+        sessionId: 'session-1',
+        playerId: 'p2',   // não sou eu
+        question: makeQuestion(),
+        timeoutSeconds: 30,
+      });
+    });
+    expect(screen.queryByTestId('challenge-modal')).not.toBeInTheDocument();
   });
 });

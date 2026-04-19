@@ -62,6 +62,44 @@ describe('CameraController', () => {
     controller = new CameraController(camera, mockControls as never);
   });
 
+  describe('zoomToVictory', () => {
+    it('posiciona câmera próxima ao alvo de vitória (camera.position.set chamado)', () => {
+      const victoryPos = new THREE.Vector3(9, 2.5, 4);
+      controller.zoomToVictory(victoryPos);
+      expect(camera.position.set).toHaveBeenCalled();
+    });
+
+    it('aponta controls.target para a posição de vitória', () => {
+      const victoryPos = new THREE.Vector3(9, 2.5, 4);
+      controller.zoomToVictory(victoryPos);
+      expect(mockControls.target.copy).toHaveBeenCalledWith(victoryPos);
+    });
+
+    it('update() no modo vitória chama controls.update (órbita ativa)', () => {
+      const anyPos = new THREE.Vector3(0, 0, 0);
+      controller.zoomToVictory(new THREE.Vector3(9, 2.5, 4));
+      vi.mocked(mockControls.update).mockClear();
+      controller.update(anyPos);
+      expect(mockControls.update).toHaveBeenCalled();
+    });
+
+    it('update() no modo vitória continua chamando camera.position.set (órbita)', () => {
+      const anyPos = new THREE.Vector3(0, 0, 0);
+      controller.zoomToVictory(new THREE.Vector3(9, 2.5, 4));
+      vi.mocked(camera.position.set).mockClear();
+      controller.update(anyPos);
+      expect(camera.position.set).toHaveBeenCalled();
+    });
+
+    it('update() no modo vitória NÃO chama camera.position.lerp (sem retorno ao peão)', () => {
+      const anyPos = new THREE.Vector3(0, 0, 0);
+      controller.zoomToVictory(new THREE.Vector3(9, 2.5, 4));
+      vi.mocked(camera.position.lerp).mockClear();
+      controller.update(anyPos);
+      expect(camera.position.lerp).not.toHaveBeenCalled();
+    });
+  });
+
   describe('panToDice', () => {
     it('copia nova posição para camera.position (não lerp — snap imediato)', () => {
       const dicePos = new THREE.Vector3(12, 0, 4);

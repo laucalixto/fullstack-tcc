@@ -49,8 +49,8 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
       }
 
       if (result.quiz) {
-        // Casa de quiz — emite pergunta e adia TURN_CHANGED até resposta
-        io.to(payload.sessionId).emit(EVENTS.QUIZ_QUESTION, {
+        // Casa de quiz — emite pergunta SOMENTE ao jogador da vez (não broadcast)
+        socket.emit(EVENTS.QUIZ_QUESTION, {
           sessionId: payload.sessionId,
           playerId: payload.playerId,
           question: result.quiz,

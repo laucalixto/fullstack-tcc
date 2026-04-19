@@ -3,6 +3,8 @@ import type { GameResultPlayer } from '@safety-board/shared';
 interface PodiumResultsProps {
   players: GameResultPlayer[];
   durationSeconds: number;
+  myPlayerId?: string;
+  onViewResults?: () => void;
 }
 
 function formatDuration(seconds: number): string {
@@ -41,11 +43,14 @@ const RANK_LABEL: Record<number, string> = {
   4: '4º LUGAR',
 };
 
-export function PodiumResults({ players, durationSeconds }: PodiumResultsProps) {
+export function PodiumResults({ players, durationSeconds, myPlayerId, onViewResults }: PodiumResultsProps) {
   const byRank = Object.fromEntries(players.map((p) => [p.rank, p]));
+  const sorted = [...players].sort((a, b) => a.rank - b.rank);
 
   // Show only the podium players that exist, ordered visually
   const visibleOrder = PODIUM_ORDER.filter((r) => byRank[r]);
+
+  const myPlayer = myPlayerId ? players.find((p) => p.playerId === myPlayerId) : undefined;
 
   return (
     <div data-testid="podium-results" className="bg-surface text-on-surface min-h-screen font-body">
@@ -126,6 +131,116 @@ export function PodiumResults({ players, durationSeconds }: PodiumResultsProps) 
             })}
           </div>
         </section>
+
+        {/* Bottom section: performance card + leaderboard */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+
+          {/* Performance card — só exibido para o jogador atual */}
+          {myPlayer && (
+            <div className="lg:col-span-1 space-y-6">
+              <div
+                data-testid="podium-performance-card"
+                className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm border border-stone-100"
+              >
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">
+                      Seu Desempenho
+                    </h3>
+                    <p className="text-xl font-bold text-on-surface">{myPlayer.name}</p>
+                  </div>
+                  <span className="bg-primary-container/10 text-primary-container px-3 py-1 rounded-full text-[10px] font-black uppercase">
+                    {RANK_LABEL[myPlayer.rank]}
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-end">
+                    <span className="text-xs text-stone-500 uppercase tracking-tight">Score Total</span>
+                    <span className="text-3xl font-black text-primary">{myPlayer.score}</span>
+                  </div>
+                  <div className="w-full bg-stone-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-primary h-full"
+                      style={{ width: `${Math.min(100, Math.round((myPlayer.score / Math.max(...players.map((p) => p.score), 1)) * 100))}%` }}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 pt-4">
+                    <div className="bg-surface-container-low p-3 rounded-xl">
+                      <p className="text-lg font-bold">
+                        {myPlayer.correctAnswers}/{myPlayer.totalAnswers}
+                      </p>
+                      <p className="text-[10px] text-stone-500 uppercase font-bold">Acertos</p>
+                    </div>
+                    <div className="bg-surface-container-low p-3 rounded-xl">
+                      <p className="text-lg font-bold">{myPlayer.finalPosition}</p>
+                      <p className="text-[10px] text-stone-500 uppercase font-bold">Casa Final</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                data-testid="podium-btn-individual"
+                onClick={onViewResults}
+                className="w-full bg-primary text-white py-4 rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-primary-container transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+              >
+                Verifique seu desempenho
+              </button>
+            </div>
+          )}
+
+          {/* Leaderboard table */}
+          <div className={myPlayer ? 'lg:col-span-2' : 'lg:col-span-3'}>
+            <div className="bg-surface-container-lowest rounded-2xl shadow-sm border border-stone-100 overflow-hidden">
+              <div className="p-6 border-b border-stone-50 flex justify-between items-center">
+                <h2 className="font-bold uppercase tracking-widest text-xs text-stone-500">Leaderboard</h2>
+                <span className="text-[10px] font-bold text-secondary uppercase bg-secondary-fixed px-2 py-0.5 rounded">
+                  Ranking Final
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table
+                  data-testid="podium-leaderboard"
+                  className="w-full text-left"
+                >
+                  <thead>
+                    <tr className="bg-surface-container-low">
+                      <th className="px-6 py-4 text-[10px] uppercase font-black text-stone-500 tracking-tighter">Pos</th>
+                      <th className="px-6 py-4 text-[10px] uppercase font-black text-stone-500 tracking-tighter">Nome</th>
+                      <th className="px-6 py-4 text-[10px] uppercase font-black text-stone-500 tracking-tighter text-center">Acertos</th>
+                      <th className="px-6 py-4 text-[10px] uppercase font-black text-stone-500 tracking-tighter text-right">Score SST</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-50">
+                    {sorted.map((player) => {
+                      const isCurrent = player.playerId === myPlayerId;
+                      return (
+                        <tr
+                          key={player.playerId}
+                          data-testid={`podium-leaderboard-row-${player.rank}`}
+                          data-current={String(isCurrent)}
+                          className={`hover:bg-stone-50 transition-colors ${isCurrent ? 'bg-orange-50/30' : ''}`}
+                        >
+                          <td className="px-6 py-4">
+                            <span className={`w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-black ${isCurrent ? 'bg-primary text-white' : 'text-stone-400 font-bold text-xs'}`}>
+                              {String(player.rank).padStart(2, '0')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-bold text-on-surface">
+                            {player.name}{isCurrent ? ' (Você)' : ''}
+                          </td>
+                          <td className="px-6 py-4 text-center text-sm font-medium">{player.correctAnswers}</td>
+                          <td className="px-6 py-4 text-right font-black text-primary">{player.score}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );

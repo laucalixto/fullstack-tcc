@@ -13,6 +13,7 @@ import { socket } from '../ws/socket';
 import { gameBus } from './EventBus';
 import type { TurnChangedPayload, TurnResultPayload } from '@safety-board/shared';
 import { DICE_ZONE } from './dice/DicePhysics';
+import { BOARD_PATH } from '@safety-board/shared';
 
 interface QuizQuestionPayload {
   sessionId: string;
@@ -68,6 +69,8 @@ export function GamePage() {
     }
 
     function onQuizQuestion(payload: QuizQuestionPayload) {
+      // Ignorar se a pergunta não é para mim (defesa extra — servidor já filtra)
+      if (payload.playerId !== useGameStore.getState().myPlayerId) return;
       setQuizResult(undefined);
       setQuizPayload(payload);
     }
@@ -79,7 +82,10 @@ export function GamePage() {
 
     function onGameFinished(result: GameResultPayload) {
       setGameResult(result);
-      navigate('/podio');
+      // Câmera cinematográfica sobre o tile de chegada antes de navegar ao pódio
+      const finishTile = BOARD_PATH[BOARD_PATH.length - 1];
+      gameBus.emit('camera:victory', { position: finishTile });
+      setTimeout(() => navigate('/podio'), 3500);
     }
 
     socket.on(EVENTS.GAME_STATE,    onGameState);

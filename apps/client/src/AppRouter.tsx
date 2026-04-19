@@ -165,12 +165,16 @@ const DEFAULT_PLAYER = {
 };
 
 function PodiumPage() {
+  const navigate = useNavigate();
   const gameResult = useGameStore((s) => s.gameResult);
+  const myPlayerId = useGameStore((s) => s.myPlayerId);
 
   return (
     <PodiumResults
       players={gameResult?.players ?? []}
       durationSeconds={gameResult?.durationSeconds ?? 0}
+      myPlayerId={myPlayerId ?? undefined}
+      onViewResults={() => navigate('/resultado')}
     />
   );
 }

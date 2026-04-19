@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { PodiumResults } from '../../results/PodiumResults';
 import type { GameResultPlayer } from '@safety-board/shared';
 
@@ -74,5 +74,95 @@ describe('PodiumResults', () => {
     const players = makePlayers([{}, {}, {}, {}]);
     render(<PodiumResults players={players} durationSeconds={60} />);
     expect(screen.getByTestId('podium-player-4')).toBeInTheDocument();
+  });
+});
+
+// ─── RED: Leaderboard table e card de desempenho ─────────────────────────────
+
+describe('PodiumResults — leaderboard table', () => {
+  it('exibe a tabela leaderboard', () => {
+    render(<PodiumResults players={makePlayers([{}, {}])} durationSeconds={60} />);
+    expect(screen.getByTestId('podium-leaderboard')).toBeInTheDocument();
+  });
+
+  it('exibe uma linha por jogador', () => {
+    const players = makePlayers([{ rank: 1 }, { rank: 2 }, { rank: 3 }]);
+    render(<PodiumResults players={players} durationSeconds={60} />);
+    expect(screen.getByTestId('podium-leaderboard-row-1')).toBeInTheDocument();
+    expect(screen.getByTestId('podium-leaderboard-row-2')).toBeInTheDocument();
+    expect(screen.getByTestId('podium-leaderboard-row-3')).toBeInTheDocument();
+  });
+
+  it('exibe o nome do jogador na linha da tabela', () => {
+    const players = makePlayers([{ name: 'Alice', rank: 1 }]);
+    render(<PodiumResults players={players} durationSeconds={60} />);
+    expect(screen.getByTestId('podium-leaderboard-row-1')).toHaveTextContent('Alice');
+  });
+
+  it('exibe o score do jogador na linha da tabela', () => {
+    const players = makePlayers([{ rank: 1, score: 9500 }]);
+    render(<PodiumResults players={players} durationSeconds={60} />);
+    expect(screen.getByTestId('podium-leaderboard-row-1')).toHaveTextContent('9500');
+  });
+
+  it('exibe o número de acertos na linha da tabela', () => {
+    const players = makePlayers([{ rank: 1, correctAnswers: 7, totalAnswers: 10 }]);
+    render(<PodiumResults players={players} durationSeconds={60} />);
+    expect(screen.getByTestId('podium-leaderboard-row-1')).toHaveTextContent('7');
+  });
+
+  it('destaca a linha do jogador atual com data-current="true"', () => {
+    const players = makePlayers([{ playerId: 'me', rank: 1 }, { playerId: 'other', rank: 2 }]);
+    render(<PodiumResults players={players} durationSeconds={60} myPlayerId="me" />);
+    expect(screen.getByTestId('podium-leaderboard-row-1')).toHaveAttribute('data-current', 'true');
+    expect(screen.getByTestId('podium-leaderboard-row-2')).toHaveAttribute('data-current', 'false');
+  });
+});
+
+describe('PodiumResults — card de desempenho do jogador atual', () => {
+  it('exibe o card de desempenho quando myPlayerId é fornecido', () => {
+    const players = makePlayers([{ playerId: 'me', name: 'Alice', rank: 1 }]);
+    render(<PodiumResults players={players} durationSeconds={60} myPlayerId="me" />);
+    expect(screen.getByTestId('podium-performance-card')).toBeInTheDocument();
+  });
+
+  it('não exibe o card de desempenho quando myPlayerId é omitido', () => {
+    const players = makePlayers([{ playerId: 'me', rank: 1 }]);
+    render(<PodiumResults players={players} durationSeconds={60} />);
+    expect(screen.queryByTestId('podium-performance-card')).not.toBeInTheDocument();
+  });
+
+  it('exibe o nome do jogador atual no card', () => {
+    const players = makePlayers([{ playerId: 'me', name: 'Carol', rank: 1 }]);
+    render(<PodiumResults players={players} durationSeconds={60} myPlayerId="me" />);
+    expect(screen.getByTestId('podium-performance-card')).toHaveTextContent('Carol');
+  });
+
+  it('exibe o score do jogador atual no card', () => {
+    const players = makePlayers([{ playerId: 'me', rank: 1, score: 8800 }]);
+    render(<PodiumResults players={players} durationSeconds={60} myPlayerId="me" />);
+    expect(screen.getByTestId('podium-performance-card')).toHaveTextContent('8800');
+  });
+
+  it('exibe os acertos do jogador atual no card', () => {
+    const players = makePlayers([{ playerId: 'me', rank: 1, correctAnswers: 6, totalAnswers: 8 }]);
+    render(<PodiumResults players={players} durationSeconds={60} myPlayerId="me" />);
+    expect(screen.getByTestId('podium-performance-card')).toHaveTextContent('6/8');
+  });
+
+  it('botão "Verifique seu desempenho" chama onViewResults', () => {
+    const onViewResults = vi.fn();
+    const players = makePlayers([{ playerId: 'me', rank: 1 }]);
+    render(
+      <PodiumResults players={players} durationSeconds={60} myPlayerId="me" onViewResults={onViewResults} />,
+    );
+    fireEvent.click(screen.getByTestId('podium-btn-individual'));
+    expect(onViewResults).toHaveBeenCalledOnce();
+  });
+
+  it('botão "Verifique seu desempenho" está visível mesmo sem onViewResults', () => {
+    const players = makePlayers([{ playerId: 'me', rank: 1 }]);
+    render(<PodiumResults players={players} durationSeconds={60} myPlayerId="me" />);
+    expect(screen.getByTestId('podium-btn-individual')).toBeInTheDocument();
   });
 });
