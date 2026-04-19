@@ -103,6 +103,7 @@ vi.mock('../../three/dice/DicePhysics', () => ({
 // ─── Imports após mocks ───────────────────────────────────────────────────────
 import { initThreeScene } from '../../three/scene';
 import { gameBus } from '../../three/EventBus';
+import { DicePhysics } from '../../three/dice/DicePhysics';
 import type { Player } from '@safety-board/shared';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -284,7 +285,7 @@ describe('scene — buffering de peões durante dado', () => {
 
     gameBus.emit('dice:done', { face: 5 });
     vi.advanceTimersByTime(1000); // avança past 700ms delay
-    expect(pawnMock.animatePawn).toHaveBeenCalledWith('p1', 0, 5, undefined);
+    expect(pawnMock.animatePawn).toHaveBeenCalledWith('p1', 0, 5, expect.any(Function));
     vi.useRealTimers();
   });
 
@@ -383,28 +384,25 @@ describe('scene — retorno suave e animação seletiva após dado', () => {
     expect(cameraCtrl.snapToPlayer).not.toHaveBeenCalled();
   });
 
-  it('dice:done anima apenas o jogador ativo; outros são teleportados', () => {
+  it('dice:done detecta quem moveu pelo buffer (sem depender de active:player)', () => {
     vi.useFakeTimers();
-    // Sync inicial: p1 e p2 na casa 0
     gameBus.emit('players:sync', [makePlayer('p1', 0), makePlayer('p2', 0)]);
     pawnMock.animatePawn.mockClear();
     pawnMock.movePawn.mockClear();
 
-    // p1 é o jogador ativo
-    gameBus.emit('active:player', { tileIndex: 0, playerId: 'p1' });
+    // Sem emitir active:player — deve encontrar quem moveu automaticamente
     gameBus.emit('dice:throw', { position: { x: 12, y: 0.5, z: 4 } });
-    // GAME_STATE: p1 foi para casa 5, p2 ficou em 0
     gameBus.emit('players:sync', [makePlayer('p1', 5), makePlayer('p2', 0)]);
 
     gameBus.emit('dice:done', { face: 5 });
-    vi.advanceTimersByTime(1000); // advance past 700ms delay
+    vi.advanceTimersByTime(1000);
 
     expect(pawnMock.animatePawn).toHaveBeenCalledWith('p1', 0, 5, expect.any(Function));
     expect(pawnMock.animatePawn).not.toHaveBeenCalledWith('p2', expect.anything(), expect.anything(), expect.anything());
     vi.useRealTimers();
   });
 
-  it('pawn:done emitido no gameBus ao chamar o callback do peão ativo', () => {
+  it('pawn:done emitido ao chamar callback do peão que moveu (detectado automaticamente)', () => {
     vi.useFakeTimers();
     let capturedOnDone: (() => void) | undefined;
     pawnMock.animatePawn.mockImplementation((_id: string, _from: number, _to: number, onDone?: () => void) => {
@@ -412,7 +410,6 @@ describe('scene — retorno suave e animação seletiva após dado', () => {
     });
 
     gameBus.emit('players:sync', [makePlayer('p1', 0)]);
-    gameBus.emit('active:player', { tileIndex: 0, playerId: 'p1' });
     gameBus.emit('dice:throw', { position: { x: 12, y: 0.5, z: 4 } });
     gameBus.emit('players:sync', [makePlayer('p1', 5)]);
 
@@ -424,6 +421,100 @@ describe('scene — retorno suave e animação seletiva após dado', () => {
 
     capturedOnDone?.();
     expect(pawnDoneHandler).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  // ─── RED: clientes não-roladores — todos veem o dado via dice:rollStart ────
+  // Problema: dice:throw só é emitido pelo cliente que rolou → outros clientes
+  // não têm animação do dado e aplicam o buffer imediatamente ao receberem
+  // dice:rollEnd (TURN_CHANGED), antes da animação do rolador terminar.
+  //
+  // Solução: dice:rollStart dispara dicePhysics.throw() em TODOS os clientes
+  // que não são o rolador local. Assim dice:done dispara em todos ao mesmo tempo
+  // (~2s), sincronizando a animação dos peões.
+
+  it('dice:rollStart ativa buffer para clientes não-roladores', () => {
+    gameBus.emit('players:sync', [makePlayer('p1', 0)]);
+    pawnMock.animatePawn.mockClear();
+
+    // Não houve dice:throw (este cliente não rolou)
+    gameBus.emit('dice:rollStart', {}); // chega via TURN_RESULT
+    gameBus.emit('players:sync', [makePlayer('p1', 5)]); // GAME_STATE enquanto "aguardando"
+
+    expect(pawnMock.animatePawn).not.toHaveBeenCalled(); // bufferizado ✓
+  });
+
+  it('dice:rollStart em não-rolador inicia animação local do dado (chama dicePhysics.throw)', () => {
+    const diceInst = vi.mocked(DicePhysics).mock.results[0].value;
+
+    // Este cliente não rolou — não emite dice:throw
+    gameBus.emit('dice:rollStart', {});
+
+    expect(diceInst.throw).toHaveBeenCalled();
+  });
+
+  it('dice:rollStart em não-rolador chama panToDice para câmera ir ao dado', () => {
+    gameBus.emit('dice:rollStart', {});
+
+    expect(cameraCtrl.panToDice).toHaveBeenCalled();
+  });
+
+  it('dice:rollStart em rolador local NÃO duplica dicePhysics.throw', () => {
+    const diceInst = vi.mocked(DicePhysics).mock.results[0].value;
+
+    gameBus.emit('dice:throw', { position: { x: 12, y: 0.5, z: 4 } }); // rolador
+    const throwCount = diceInst.throw.mock.calls.length;
+
+    gameBus.emit('dice:rollStart', {}); // chega do servidor — no-op para rolador
+    expect(diceInst.throw.mock.calls.length).toBe(throwCount);
+  });
+
+  it('dice:done em não-rolador (via dice:rollStart) aplica buffer e anima quem moveu', () => {
+    vi.useFakeTimers();
+    gameBus.emit('players:sync', [makePlayer('p1', 0), makePlayer('p2', 0)]);
+    pawnMock.animatePawn.mockClear();
+    pawnMock.movePawn.mockClear();
+
+    gameBus.emit('dice:rollStart', {}); // não-rolador ativa buffer + animação local
+    gameBus.emit('players:sync', [makePlayer('p1', 5), makePlayer('p2', 0)]);
+
+    gameBus.emit('dice:done', { face: 5 }); // animação local termina → aplica buffer
+    vi.advanceTimersByTime(1000);
+
+    expect(pawnMock.animatePawn).toHaveBeenCalledWith('p1', 0, 5, expect.any(Function));
+    expect(pawnMock.animatePawn).not.toHaveBeenCalledWith('p2', expect.anything(), expect.anything(), expect.anything());
+    vi.useRealTimers();
+  });
+
+  it('dice:rollEnd não aplica buffer para não-roladores (dice:done é responsável)', () => {
+    vi.useFakeTimers();
+    gameBus.emit('players:sync', [makePlayer('p1', 0)]);
+    pawnMock.animatePawn.mockClear();
+
+    gameBus.emit('dice:rollStart', {}); // não-rolador inicia animação local
+    gameBus.emit('players:sync', [makePlayer('p1', 5)]);
+
+    gameBus.emit('dice:rollEnd', {}); // TURN_CHANGED chega — não deve aplicar buffer
+    vi.advanceTimersByTime(100);
+    expect(pawnMock.animatePawn).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('dice:rollEnd é ignorado em clientes que rolaram localmente (dice:throw)', () => {
+    vi.useFakeTimers();
+    gameBus.emit('players:sync', [makePlayer('p1', 0)]);
+    pawnMock.animatePawn.mockClear();
+
+    gameBus.emit('dice:throw', { position: { x: 12, y: 0.5, z: 4 } }); // rolador local
+    gameBus.emit('dice:rollStart', {}); // chega do servidor (TURN_RESULT) — no-op para rolador
+    gameBus.emit('players:sync', [makePlayer('p1', 5)]);
+
+    gameBus.emit('dice:rollEnd', {}); // TURN_CHANGED — deve ser ignorado pelo rolador
+    expect(pawnMock.animatePawn).not.toHaveBeenCalled(); // rolador espera dice:done
+
+    gameBus.emit('dice:done', { face: 5 });
+    vi.advanceTimersByTime(1000);
+    expect(pawnMock.animatePawn).toHaveBeenCalledWith('p1', 0, 5, expect.any(Function)); // só agora
     vi.useRealTimers();
   });
 });

@@ -285,6 +285,19 @@ describe('GamePage', () => {
     expect(gameBus.emit).toHaveBeenCalledWith('dice:result', { face: 4 });
   });
 
+  it('TURN_RESULT emite dice:rollStart no gameBus (para sincronizar não-roladores)', () => {
+    renderGamePage();
+    act(() => { triggerSocket(EVENTS.TURN_RESULT, { playerId: 'p1', dice: 3, newPosition: 3 }); });
+    expect(gameBus.emit).toHaveBeenCalledWith('dice:rollStart', {});
+  });
+
+  it('TURN_CHANGED emite dice:rollEnd no gameBus (para aplicar buffer nos não-roladores)', () => {
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
+    renderGamePage();
+    act(() => { triggerSocket(EVENTS.TURN_CHANGED, { playerId: 'p1' }); });
+    expect(gameBus.emit).toHaveBeenCalledWith('dice:rollEnd', {});
+  });
+
   // ─── Quiz filtrado (P1) ────────────────────────────────────────────────────
 
   it('QUIZ_QUESTION com meu playerId abre modal após pawn:done', () => {

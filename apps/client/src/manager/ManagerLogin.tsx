@@ -88,7 +88,7 @@ export function ManagerLogin({ onLogin, error, isLoading = false }: ManagerLogin
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                 >
                   <span className="material-symbols-outlined text-lg">
-                    {showPassword ? 'visibility_off' : 'visibility'}
+                    {showPassword ? 'visibility' : 'visibility_off'}
                   </span>
                 </button>
               </div>

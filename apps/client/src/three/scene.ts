@@ -77,8 +77,8 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   const activePos = new THREE.Vector3(BOARD_PATH[0].x, BOARD_PATH[0].y, BOARD_PATH[0].z);
 
   let diceRolling = false;
+  let localDiceActive = false; // true apenas quando ESTE cliente rolou o dado
   let pendingPawnSync: Player[] | null = null;
-  let activePlayerId: string | null = null;
 
   // DicePhysics — animação tween pura na zona de rolagem
   const dicePhysics = new DicePhysics(scene);
@@ -120,10 +120,9 @@ export function initThreeScene(container: HTMLDivElement): () => void {
     applyPawnPositions(players);
   });
 
-  const unsubActive = gameBus.on<{ tileIndex: number; playerId?: string }>('active:player', ({ tileIndex, playerId }) => {
+  const unsubActive = gameBus.on<{ tileIndex: number; playerId?: string }>('active:player', ({ tileIndex }) => {
     const tile = BOARD_PATH[tileIndex] ?? BOARD_PATH[0];
     activePos.set(tile.x, tile.y, tile.z);
-    if (playerId) activePlayerId = playerId;
     if (!diceRolling) {
       cameraController.snapToPlayer(activePos);
     }
@@ -135,8 +134,24 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   const unsubDiceThrow = gameBus.on<{ position: typeof DICE_ZONE }>('dice:throw', ({ position }) => {
     diceRolling = true;
+    localDiceActive = true;
     dicePhysics.throw(position);
     cameraController.panToDice(diceZoneVec);
+  });
+
+  // Todos os clientes veem o dado: dice:rollStart dispara throw() nos não-roladores
+  // → dice:done dispara em todos ao término (~2s), sincronizando animação dos peões
+  const unsubRollStart = gameBus.on('dice:rollStart', () => {
+    if (localDiceActive) return; // rolador já iniciou via dice:throw
+    diceRolling = true;
+    dicePhysics.throw(DICE_ZONE);
+    cameraController.panToDice(diceZoneVec);
+  });
+
+  // dice:rollEnd ignorado — dice:done (via DicePhysics) sincroniza todos os clientes
+  const unsubRollEnd = gameBus.on('dice:rollEnd', () => {
+    if (localDiceActive) return; // rolador local: aguarda dice:done
+    // não-roladores: animação local iniciada em dice:rollStart; dice:done cuida do buffer
   });
 
   const unsubDiceResult = gameBus.on<{ face: number }>('dice:result', ({ face }) => {
@@ -145,22 +160,23 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   const unsubDiceDone = gameBus.on<{ face: number }>('dice:done', () => {
     diceRolling = false;
-    // Pre-compute activePos destination so camera can pan there immediately
+    localDiceActive = false;
     const synced = pendingPawnSync;
-    const animId = activePlayerId;
     pendingPawnSync = null;
-    if (synced && animId) {
-      const active = synced.find((p) => p.id === animId);
-      if (active) {
-        const tile = BOARD_PATH[active.position] ?? BOARD_PATH[0];
-        activePos.set(tile.x, tile.y, tile.z);
-      }
+    // Detecta quem moveu comparando posições conhecidas com o buffer
+    const movedPlayer = synced?.find((p) => {
+      const oldPos = pawnPositions.get(p.id);
+      return oldPos !== undefined && oldPos !== p.position;
+    });
+    // Pré-computa activePos para destino correto antes de iniciar lerp da câmera
+    if (movedPlayer) {
+      const tile = BOARD_PATH[movedPlayer.position] ?? BOARD_PATH[0];
+      activePos.set(tile.x, tile.y, tile.z);
     }
-    // Smooth camera return (lerp-based, not instant cut)
     cameraController.smoothReturnToPlayer();
-    // Delay pawn animation so camera settles before pawn moves
+    if (!synced) return;
     setTimeout(() => {
-      if (synced) applyPawnPositions(synced, animId);
+      applyPawnPositions(synced, movedPlayer?.id ?? null);
     }, 700);
   });
 
@@ -230,6 +246,8 @@ export function initThreeScene(container: HTMLDivElement): () => void {
     unsubPlayers();
     unsubActive();
     unsubDiceThrow();
+    unsubRollStart();
+    unsubRollEnd();
     unsubDiceResult();
     unsubDiceDone();
     unsubVictory();

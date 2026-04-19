@@ -63,9 +63,13 @@ export function GamePage() {
       if (player !== undefined) {
         gameBus.emit('active:player', { tileIndex: player.position, playerId });
       }
+      // Sinaliza fim da jogada para não-roladores aplicarem o buffer de peões
+      gameBus.emit('dice:rollEnd', {});
     }
 
     function onTurnResult({ dice }: TurnResultPayload) {
+      // rollStart antes de result: throw() limpa pendingFace; setResult() define a face
+      gameBus.emit('dice:rollStart', {});
       gameBus.emit('dice:result', { face: dice });
     }
 
