@@ -26,6 +26,9 @@ export const EVENTS = {
   TURN_RESULT: 'turn:result',
   TURN_CHANGED: 'turn:changed',
 
+  // ─── Jogador ──────────────────────────────────────────────────────────────
+  PLAYER_RENAME: 'player:rename',
+
   // ─── Quiz ─────────────────────────────────────────────────────────────────
   QUIZ_QUESTION: 'quiz:question',
   QUIZ_ANSWER: 'quiz:answer',
@@ -126,4 +129,10 @@ export interface TurnResultPayload {
   playerId: string;
   dice: number;
   newPosition: number;
+}
+
+export interface PlayerRenamePayload {
+  sessionId: string;
+  playerId: string;
+  name: string; // nome completo: firstName + " " + lastName
 }

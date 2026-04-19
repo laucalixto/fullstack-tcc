@@ -80,6 +80,7 @@ export interface GameSession {
   createdAt: number;
   quizConfig: QuizConfig;
   maxPlayers: 2 | 3 | 4;
+  lobbyReadyPlayers?: string[];
 }
 
 // ─── Registro de jogador pós-partida ─────────────────────────────────────────

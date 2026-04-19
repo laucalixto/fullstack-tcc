@@ -77,11 +77,11 @@ describe('LobbyWaiting', () => {
     expect(screen.getByTestId('start-button')).not.toBeDisabled();
   });
 
-  it('exibe contagem de jogadores', () => {
+  it('exibe contagem de jogadores no formato "N / maxPlayers"', () => {
     render(
-      <LobbyWaiting pin="123456" players={makePlayers(3)} onStart={vi.fn()} isFacilitator={false} />,
+      <LobbyWaiting pin="123456" players={makePlayers(3)} maxPlayers={4} onStart={vi.fn()} isFacilitator={false} />,
     );
-    expect(screen.getByTestId('player-count')).toHaveTextContent('3');
+    expect(screen.getByTestId('player-count')).toHaveTextContent('3 / 4');
   });
 
   // ─── RED: falha até sessionName e shareLink serem implementados ───────────────
@@ -156,10 +156,10 @@ describe('LobbyWaiting', () => {
     expect(screen.queryByText(/facilitador/i)).not.toBeInTheDocument();
   });
 
-  it('exibe mensagem do facilitador quando autoStartAt não está definido', () => {
+  it('exibe mensagem de espera quando autoStartAt não está definido', () => {
     render(
       <LobbyWaiting pin="123456" players={makePlayers(1)} maxPlayers={2} onStart={vi.fn()} isFacilitator={false} />,
     );
-    expect(screen.getByText(/facilitador/i)).toBeInTheDocument();
+    expect(screen.getByText(/todos acessarem/i)).toBeInTheDocument();
   });
 });

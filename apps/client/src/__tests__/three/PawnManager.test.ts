@@ -229,3 +229,48 @@ describe('PawnManager — animação casa a casa', () => {
     expect(() => manager.animatePawn('ghost', 0, 5)).not.toThrow();
   });
 });
+
+// ─── RED: callback onDone ao concluir animação ────────────────────────────────
+// animatePawn aceita 4º argumento opcional onDone?: () => void
+// Deve ser chamado exatamente 1 vez após o último passo completar
+
+describe('PawnManager — callback onDone', () => {
+  let scene: THREE.Scene;
+  let manager: PawnManager;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    scene = new THREE.Scene();
+    manager = new PawnManager(scene);
+  });
+
+  it('chama onDone exatamente uma vez ao concluir todos os passos', () => {
+    const onDone = vi.fn();
+    manager.addPawn('p1', 0);
+    manager.animatePawn('p1', 0, 3, onDone);
+
+    manager.update(STEP_DURATION + 0.01);
+    manager.update(STEP_DURATION + 0.01);
+    manager.update(STEP_DURATION + 0.01);
+
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('não chama onDone antes da animação terminar', () => {
+    const onDone = vi.fn();
+    manager.addPawn('p1', 0);
+    manager.animatePawn('p1', 0, 3, onDone);
+
+    manager.update(STEP_DURATION * 0.5); // metade do 1º passo
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('sem onDone não lança erro ao concluir', () => {
+    manager.addPawn('p1', 0);
+    manager.animatePawn('p1', 0, 2);
+    expect(() => {
+      manager.update(STEP_DURATION + 0.01);
+      manager.update(STEP_DURATION + 0.01);
+    }).not.toThrow();
+  });
+});

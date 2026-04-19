@@ -64,13 +64,20 @@ function PinEntryPage() {
 }
 
 function CharacterSelectPage() {
-  const navigate = useNavigate();
+  const navigate       = useNavigate();
+  const session        = useGameStore((s) => s.session);
+  const myPlayerId     = useGameStore((s) => s.myPlayerId);
   const setPendingPlayer = useGameStore((s) => s.setPendingPlayer);
 
   const handleConfirm = useCallback((firstName: string, lastName: string, avatarId: string) => {
-    setPendingPlayer(`${firstName} ${lastName}`, avatarId);
+    const fullName = `${firstName} ${lastName}`;
+    setPendingPlayer(fullName, avatarId);
+    // Atualiza o nome no servidor para todos os jogadores da sessão
+    if (session?.id && myPlayerId) {
+      socket.emit(EVENTS.PLAYER_RENAME, { sessionId: session.id, playerId: myPlayerId, name: fullName });
+    }
     navigate('/lobby');
-  }, [navigate, setPendingPlayer]);
+  }, [navigate, session?.id, myPlayerId, setPendingPlayer]);
 
   return <CharacterSelect onConfirm={handleConfirm} />;
 }
@@ -82,11 +89,15 @@ function LobbyWaitingPage() {
   const setSession  = useGameStore((s) => s.setSession);
   const [autoStartAt, setAutoStartAt] = useState<number | undefined>();
 
-  const players     = session?.players ?? [];
   const pin         = session?.pin ?? '------';
   const sessionName = session?.name;
   const shareLink   = session?.shareLink;
   const maxPlayers  = session?.maxPlayers;
+  // Mostra apenas quem chegou ao lobby (lobbyReadyPlayers); fallback = todos (compatibilidade)
+  const lobbyReady  = session?.lobbyReadyPlayers;
+  const players     = lobbyReady !== undefined
+    ? (session?.players ?? []).filter((p) => lobbyReady.includes(p.id))
+    : (session?.players ?? []);
 
   // Sinaliza ao servidor que chegou ao lobby
   useEffect(() => {

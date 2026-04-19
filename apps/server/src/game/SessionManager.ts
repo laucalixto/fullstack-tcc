@@ -81,6 +81,7 @@ export class SessionManager {
         timeoutSeconds: quizConfig?.timeoutSeconds ?? DEFAULT_QUIZ_CONFIG.timeoutSeconds,
       },
       maxPlayers,
+      lobbyReadyPlayers: [],
     };
 
     this.sessions.set(id, {
@@ -263,7 +264,17 @@ export class SessionManager {
     const entry = this.sessions.get(sessionId);
     if (!entry) throw new Error('SESSION_NOT_FOUND');
     entry.lobbyReadyPlayers.add(playerId);
+    // Keep session.lobbyReadyPlayers in sync (for GAME_STATE broadcasts)
+    entry.session.lobbyReadyPlayers = [...entry.lobbyReadyPlayers];
     return entry.lobbyReadyPlayers.size >= entry.session.maxPlayers;
+  }
+
+  renamePlayer(sessionId: string, playerId: string, name: string): void {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) throw new Error('SESSION_NOT_FOUND');
+    const player = entry.session.players.find((p) => p.id === playerId);
+    if (!player) throw new Error('PLAYER_NOT_FOUND');
+    player.name = name;
   }
 
   markGameReady(sessionId: string, playerId: string): boolean {

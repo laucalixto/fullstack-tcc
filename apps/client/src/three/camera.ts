@@ -94,6 +94,12 @@ export class CameraController {
     this.controls.target.copy(tilePos);
   }
 
+  /** Inicia retorno suave (lerp) ao peão ativo após dado parar. */
+  smoothReturnToPlayer(): void {
+    this.lastInteractionTime = 0;
+    this.isReturning = true;
+  }
+
   /** Câmera close-up isométrica sobre a zona do dado. Previne auto-return durante a física. */
   panToDice(dicePos: THREE.Vector3): void {
     this.lastInteractionTime = Date.now(); // bloqueia auto-return enquanto dado rola

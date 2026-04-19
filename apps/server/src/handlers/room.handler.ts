@@ -7,6 +7,7 @@ import {
   type RoomErrorPayload,
   type LobbyReadyPayload,
   type PlayerGameReadyPayload,
+  type PlayerRenamePayload,
 } from '@safety-board/shared';
 import { SessionManager } from '../game/SessionManager.js';
 
@@ -47,10 +48,28 @@ export function registerRoomHandler(
     }
   });
 
+  // Jogador atualizou nome+sobrenome após CharacterSelect → broadcast para todos
+  socket.on(EVENTS.PLAYER_RENAME, (payload: PlayerRenamePayload) => {
+    try {
+      sm.renamePlayer(payload.sessionId, payload.playerId, payload.name);
+      const session = sm.getById(payload.sessionId);
+      if (session) {
+        io.to(payload.sessionId).emit(EVENTS.GAME_STATE, session);
+      }
+    } catch {
+      // sessão ou jogador não encontrado — ignora silenciosamente
+    }
+  });
+
   // Todos os jogadores chegaram ao lobby → agenda auto-start sincronizado
   socket.on(EVENTS.LOBBY_READY, (payload: LobbyReadyPayload) => {
     try {
       const allReady = sm.markLobbyReady(payload.sessionId, payload.playerId);
+      // Broadcast updated session so all clients reflect lobby-ready players
+      const updatedSession = sm.getById(payload.sessionId);
+      if (updatedSession) {
+        io.to(payload.sessionId).emit(EVENTS.GAME_STATE, updatedSession);
+      }
       if (allReady) {
         const autoStartAt = Date.now() + autoStartDelayMs;
         io.to(payload.sessionId).emit(EVENTS.GAME_STARTING, {

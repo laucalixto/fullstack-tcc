@@ -4,7 +4,6 @@ import { EVENTS } from '@safety-board/shared';
 import type { GameSession, GameResultPayload } from '@safety-board/shared';
 
 import { ThreeCanvas } from './ThreeCanvas';
-import { ScoreHUD } from '../hud/ScoreHUD';
 import { PlayerList } from '../hud/PlayerList';
 import { InactivityTimer } from '../hud/InactivityTimer';
 import { ChallengeModal } from '../lobby/ChallengeModal';
@@ -36,8 +35,10 @@ export function GamePage() {
   const setGameResult = useGameStore((s) => s.setGameResult);
 
   const [quizPayload, setQuizPayload] = useState<QuizQuestionPayload | null>(null);
+  const [quizPending, setQuizPending] = useState<QuizQuestionPayload | null>(null);
   const [quizResult, setQuizResult] = useState<'correct' | 'incorrect' | undefined>();
   const [isDiceRolling, setIsDiceRolling] = useState(false);
+  const [victoryPending, setVictoryPending] = useState(false);
 
   // Sincroniza o estado inicial ao montar: GAME_STATE pode ter chegado antes do GamePage existir
   useEffect(() => {
@@ -46,7 +47,7 @@ export function GamePage() {
     gameBus.emit('players:sync', s.players);
     const currentPlayer = s.players[s.currentPlayerIndex];
     if (currentPlayer) {
-      gameBus.emit('active:player', { tileIndex: currentPlayer.position });
+      gameBus.emit('active:player', { tileIndex: currentPlayer.position, playerId: currentPlayer.id });
     }
   }, []);
 
@@ -60,7 +61,7 @@ export function GamePage() {
       const session = useGameStore.getState().session;
       const player = session?.players.find((p) => p.id === playerId);
       if (player !== undefined) {
-        gameBus.emit('active:player', { tileIndex: player.position });
+        gameBus.emit('active:player', { tileIndex: player.position, playerId });
       }
     }
 
@@ -69,10 +70,9 @@ export function GamePage() {
     }
 
     function onQuizQuestion(payload: QuizQuestionPayload) {
-      // Ignorar se a pergunta não é para mim (defesa extra — servidor já filtra)
       if (payload.playerId !== useGameStore.getState().myPlayerId) return;
       setQuizResult(undefined);
-      setQuizPayload(payload);
+      setQuizPending(payload); // buffer — will open after pawn:done
     }
 
     function onQuizResult(payload: { correct: boolean }) {
@@ -82,10 +82,7 @@ export function GamePage() {
 
     function onGameFinished(result: GameResultPayload) {
       setGameResult(result);
-      // Câmera cinematográfica sobre o tile de chegada antes de navegar ao pódio
-      const finishTile = BOARD_PATH[BOARD_PATH.length - 1];
-      gameBus.emit('camera:victory', { position: finishTile });
-      setTimeout(() => navigate('/podio'), 3500);
+      setVictoryPending(true); // will fire camera:victory after pawn:done
     }
 
     socket.on(EVENTS.GAME_STATE,    onGameState);
@@ -99,6 +96,21 @@ export function GamePage() {
       setIsDiceRolling(false);
     });
 
+    const unsubPawnDone = gameBus.on('pawn:done', () => {
+      setQuizPending((pending) => {
+        if (pending) setQuizPayload(pending);
+        return null;
+      });
+      setVictoryPending((wasPending) => {
+        if (wasPending) {
+          const finishTile = BOARD_PATH[BOARD_PATH.length - 1];
+          gameBus.emit('camera:victory', { position: finishTile });
+          setTimeout(() => navigate('/podio'), 3500);
+        }
+        return false;
+      });
+    });
+
     return () => {
       socket.off(EVENTS.GAME_STATE,    onGameState);
       socket.off(EVENTS.TURN_CHANGED,  onTurnChanged);
@@ -107,6 +119,7 @@ export function GamePage() {
       socket.off(EVENTS.QUIZ_RESULT,   onQuizResult);
       socket.off(EVENTS.GAME_FINISHED, onGameFinished);
       unsubDiceDone();
+      unsubPawnDone();
     };
   }, [navigate, setSession, setGameResult]);
 
@@ -137,6 +150,28 @@ export function GamePage() {
     });
   }, [quizPayload]);
 
+  // Fallback: show quiz after 3s if pawn:done never fires (e.g., no movement)
+  useEffect(() => {
+    if (!quizPending) return;
+    const timer = setTimeout(() => {
+      setQuizPayload(quizPending);
+      setQuizPending(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [quizPending]);
+
+  // Fallback: trigger victory camera after 3s if pawn:done never fires
+  useEffect(() => {
+    if (!victoryPending) return;
+    const timer = setTimeout(() => {
+      setVictoryPending(false);
+      const finishTile = BOARD_PATH[BOARD_PATH.length - 1];
+      gameBus.emit('camera:victory', { position: finishTile });
+      setTimeout(() => navigate('/podio'), 3500);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [victoryPending, navigate]);
+
   const handleInactivityTimeout = useCallback(() => {
     handleRollDice();
   }, [handleRollDice]);
@@ -150,22 +185,27 @@ export function GamePage() {
       {/* Canvas Three.js — fundo */}
       <ThreeCanvas />
 
-      {/* HUD overlay — não bloqueia interação com o canvas */}
-      <div
-        style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
-      >
-        <ScoreHUD
-          players={players}
-          currentPlayerIndex={currentPlayerIndex}
-          myPlayerId={myPlayerId ?? undefined}
-        />
+      {/* ── HUD overlay ── */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
 
-        <PlayerList
-          players={players}
-          currentPlayerIndex={currentPlayerIndex}
-          myPlayerId={myPlayerId ?? undefined}
-        />
+        {/* Left panel — "Equipe na Sessão" glass-card */}
+        <div
+          className="absolute left-8 top-6 z-30 w-64"
+          style={{ pointerEvents: 'none' }}
+        >
+          <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-2xl p-5 shadow-lg">
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-4">
+              Equipe na Sessão
+            </h4>
+            <PlayerList
+              players={players}
+              currentPlayerIndex={currentPlayerIndex}
+              myPlayerId={myPlayerId ?? undefined}
+            />
+          </div>
+        </div>
 
+        {/* Inactivity timer */}
         {isMyTurn && (
           <InactivityTimer
             seconds={15}
@@ -175,24 +215,27 @@ export function GamePage() {
         )}
       </div>
 
-      {/* Botão de rolar dado — interativo, só no turno do jogador */}
+      {/* Bottom-center: botão dado — estilo reference (círculo grande) */}
       {isMyTurn && (
-        <button
-          data-testid="btn-roll-dice"
-          onClick={handleRollDice}
-          disabled={isDiceRolling}
-          style={{
-            position: 'absolute',
-            bottom: '2rem',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            pointerEvents: 'auto',
-            zIndex: 10,
-          }}
-          className="px-8 py-4 bg-primary text-white font-black uppercase tracking-widest rounded-xl shadow-2xl text-sm hover:scale-105 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+        <div
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-4"
+          style={{ pointerEvents: 'auto' }}
         >
-          {isDiceRolling ? 'Rolando...' : 'Rolar Dado'}
-        </button>
+          <div className="relative group">
+            <div className="absolute -inset-6 bg-primary/20 rounded-full blur-2xl group-hover:bg-primary/40 transition-all animate-pulse" />
+            <button
+              data-testid="btn-roll-dice"
+              onClick={handleRollDice}
+              disabled={isDiceRolling}
+              className="relative h-32 w-32 rounded-full bg-primary shadow-2xl flex flex-col items-center justify-center text-white border-4 border-white/30 active:scale-95 hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+            >
+              <span className="text-5xl mb-1">🎲</span>
+              <span className="font-black text-xs uppercase tracking-widest">
+                {isDiceRolling ? 'Rolando...' : 'Lançar'}
+              </span>
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Modal de quiz — z-index mais alto, bloqueia tudo */}

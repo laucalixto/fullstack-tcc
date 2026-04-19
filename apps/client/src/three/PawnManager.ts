@@ -23,8 +23,9 @@ interface PawnStep {
 
 interface PawnAnim {
   steps:    PawnStep[];
-  stepIdx:  number;  // passo atual em execução
-  t:        number;  // progresso [0, 1] dentro do passo atual
+  stepIdx:  number;
+  t:        number;
+  onDone?:  () => void;
 }
 
 export class PawnManager {
@@ -63,7 +64,7 @@ export class PawnManager {
    * Anima o peão de `fromIndex` até `toIndex` passando tile a tile.
    * Aciona arco em Y quando a diferença de altura entre tiles é ≥ JUMP_THRESHOLD.
    */
-  animatePawn(playerId: string, fromIndex: number, toIndex: number): void {
+  animatePawn(playerId: string, fromIndex: number, toIndex: number, onDone?: () => void): void {
     if (!this.pawns.has(playerId)) return;
     if (fromIndex === toIndex) return;
 
@@ -71,7 +72,7 @@ export class PawnManager {
     for (let i = fromIndex; i < toIndex; i++) {
       steps.push({ from: i, to: i + 1 });
     }
-    this.animations.set(playerId, { steps, stepIdx: 0, t: 0 });
+    this.animations.set(playerId, { steps, stepIdx: 0, t: 0, onDone });
   }
 
   /** Retorna `true` enquanto houver animação ativa para este jogador. */
@@ -111,9 +112,9 @@ export class PawnManager {
         anim.stepIdx++;
         anim.t = 0;
         if (anim.stepIdx >= anim.steps.length) {
-          // Snap final exato ao tile de destino
           this.movePawn(playerId, step.to);
           this.animations.delete(playerId);
+          anim.onDone?.();
         }
       }
     }

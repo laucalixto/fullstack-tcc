@@ -8,8 +8,19 @@ vi.mock('../three/ThreeCanvas', () => ({
   ThreeCanvas: () => <div data-testid="three-canvas" />,
 }));
 
+// gameBus mock com roteamento real de eventos (necessário para pawn:done chegar aos handlers)
+const gameBusHandlers: Record<string, Set<(...args: unknown[]) => void>> = {};
 vi.mock('../three/EventBus', () => ({
-  gameBus: { emit: vi.fn(), on: vi.fn(() => vi.fn()) },
+  gameBus: {
+    emit: vi.fn((event: string, payload?: unknown) => {
+      gameBusHandlers[event]?.forEach((h) => h(payload));
+    }),
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      if (!gameBusHandlers[event]) gameBusHandlers[event] = new Set();
+      gameBusHandlers[event].add(handler);
+      return () => gameBusHandlers[event].delete(handler);
+    }),
+  },
 }));
 
 // Handlers registry compartilhado entre mock e testes
@@ -80,6 +91,7 @@ describe('GamePage', () => {
     vi.mocked(socket.emit).mockClear();
     vi.mocked(gameBus.emit).mockClear();
     Object.keys(socketHandlers).forEach((k) => { socketHandlers[k] = []; });
+    Object.keys(gameBusHandlers).forEach((k) => { gameBusHandlers[k] = new Set(); });
     useGameStore.setState({
       session: null,
       myPlayerId: null,
@@ -93,13 +105,7 @@ describe('GamePage', () => {
     expect(screen.getByTestId('three-canvas')).toBeInTheDocument();
   });
 
-  it('renderiza ScoreHUD sobreposto ao canvas', () => {
-    useGameStore.setState({ session: makeSession(), myPlayerId: 'p1', isMyTurn: true });
-    renderGamePage();
-    expect(screen.getByTestId('score-hud')).toBeInTheDocument();
-  });
-
-  it('renderiza PlayerList sobreposto ao canvas', () => {
+  it('renderiza PlayerList (Equipe na Sessão) sobreposto ao canvas', () => {
     useGameStore.setState({ session: makeSession(), myPlayerId: 'p1', isMyTurn: true });
     renderGamePage();
     expect(screen.getByTestId('player-list')).toBeInTheDocument();
@@ -135,7 +141,7 @@ describe('GamePage', () => {
     expect(useGameStore.getState().session?.players[0].score).toBe(150);
   });
 
-  it('QUIZ_QUESTION abre o ChallengeModal', () => {
+  it('QUIZ_QUESTION não abre modal imediatamente — aguarda pawn:done', () => {
     useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
     renderGamePage();
     act(() => {
@@ -146,6 +152,21 @@ describe('GamePage', () => {
         timeoutSeconds: 30,
       });
     });
+    expect(screen.queryByTestId('challenge-modal')).not.toBeInTheDocument();
+  });
+
+  it('pawn:done enquanto quiz pendente abre o ChallengeModal', () => {
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.QUIZ_QUESTION, {
+        sessionId: 'session-1',
+        playerId: 'p1',
+        question: makeQuestion(),
+        timeoutSeconds: 30,
+      });
+    });
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
     expect(screen.getByTestId('challenge-modal')).toBeInTheDocument();
   });
 
@@ -160,6 +181,7 @@ describe('GamePage', () => {
         timeoutSeconds: 30,
       });
     });
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
     fireEvent.click(screen.getByTestId('challenge-option-0'));
     expect(socket.emit).toHaveBeenCalledWith(EVENTS.QUIZ_ANSWER, expect.objectContaining({
       sessionId: 'session-1',
@@ -169,8 +191,9 @@ describe('GamePage', () => {
     }));
   });
 
-  it('GAME_FINISHED emite camera:victory no gameBus', () => {
+  it('GAME_FINISHED não emite camera:victory imediatamente — aguarda pawn:done', () => {
     renderGamePage();
+    vi.mocked(gameBus.emit).mockClear();
     act(() => {
       triggerSocket(EVENTS.GAME_FINISHED, {
         sessionId: 'session-1',
@@ -178,10 +201,10 @@ describe('GamePage', () => {
         durationSeconds: 120,
       });
     });
-    expect(gameBus.emit).toHaveBeenCalledWith('camera:victory', expect.anything());
+    expect(gameBus.emit).not.toHaveBeenCalledWith('camera:victory', expect.anything());
   });
 
-  it('GAME_FINISHED navega para /podio após delay de câmera', () => {
+  it('pawn:done enquanto victoryPending emite camera:victory e navega após delay', () => {
     vi.useFakeTimers();
     renderGamePage();
     act(() => {
@@ -191,9 +214,10 @@ describe('GamePage', () => {
         durationSeconds: 120,
       });
     });
-    // Ainda não navegou (câmera está animando)
+    vi.mocked(gameBus.emit).mockClear();
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
+    expect(gameBus.emit).toHaveBeenCalledWith('camera:victory', expect.anything());
     expect(mockNavigate).not.toHaveBeenCalledWith('/podio');
-    // Avança o timer
     act(() => { vi.runAllTimers(); });
     expect(mockNavigate).toHaveBeenCalledWith('/podio');
     vi.useRealTimers();
@@ -219,7 +243,7 @@ describe('GamePage', () => {
     session.players[0].position = 4;
     useGameStore.setState({ session, myPlayerId: 'p1' });
     renderGamePage();
-    expect(gameBus.emit).toHaveBeenCalledWith('active:player', { tileIndex: 4 });
+    expect(gameBus.emit).toHaveBeenCalledWith('active:player', { tileIndex: 4, playerId: 'p1' });
   });
 
   it('GAME_STATE emite players:sync no gameBus com lista de jogadores', () => {
@@ -235,7 +259,7 @@ describe('GamePage', () => {
     useGameStore.setState({ session, myPlayerId: 'p1' });
     renderGamePage();
     act(() => { triggerSocket(EVENTS.TURN_CHANGED, { playerId: 'p1' }); });
-    expect(gameBus.emit).toHaveBeenCalledWith('active:player', { tileIndex: 7 });
+    expect(gameBus.emit).toHaveBeenCalledWith('active:player', { tileIndex: 7, playerId: 'p1' });
   });
 
   // ─── Dado (Fase F) ────────────────────────────────────────────────────────────
@@ -263,7 +287,7 @@ describe('GamePage', () => {
 
   // ─── Quiz filtrado (P1) ────────────────────────────────────────────────────
 
-  it('QUIZ_QUESTION com meu playerId abre o ChallengeModal', () => {
+  it('QUIZ_QUESTION com meu playerId abre modal após pawn:done', () => {
     useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
     renderGamePage();
     act(() => {
@@ -274,6 +298,10 @@ describe('GamePage', () => {
         timeoutSeconds: 30,
       });
     });
+    // Não abre imediatamente
+    expect(screen.queryByTestId('challenge-modal')).not.toBeInTheDocument();
+    // Abre após pawn:done
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
     expect(screen.getByTestId('challenge-modal')).toBeInTheDocument();
   });
 

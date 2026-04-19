@@ -56,4 +56,18 @@ describe('ManagerLogin', () => {
     expect(screen.getByTestId('login-submit')).toBeDisabled();
     expect(screen.getByTestId('login-loading')).toBeInTheDocument();
   });
+
+  it('deve alternar a visibilidade da senha ao clicar no botão', () => {
+    render(<ManagerLogin onLogin={vi.fn()} />);
+    
+    const passwordInput = screen.getByTestId('login-password');
+    expect(passwordInput).toHaveAttribute('type', 'password');
+    
+    const toggleButton = screen.getByTestId('toggle-password-visibility');
+    fireEvent.click(toggleButton);
+    expect(passwordInput).toHaveAttribute('type', 'text');
+    
+    fireEvent.click(toggleButton);
+    expect(passwordInput).toHaveAttribute('type', 'password');
+  });
 });

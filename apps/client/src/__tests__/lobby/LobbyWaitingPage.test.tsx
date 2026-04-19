@@ -127,6 +127,45 @@ describe('LobbyWaitingPage', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/tutorial');
   });
 
+  // ─── RED: sincronização do lobby ──────────────────────────────────────────────
+  // Bug: P2 vai ao lobby e vê P1 listado (e contador "2") mesmo P1 não tendo chegado
+  // ao lobby. A lista deve mostrar apenas quem enviou LOBBY_READY (lobbyReadyPlayers).
+
+  it('exibe apenas jogadores em lobbyReadyPlayers (não todos da sessão)', () => {
+    const session = {
+      ...makeSession(),
+      players: [
+        { id: 'p1', name: 'Alice', score: 0, position: 0, isConnected: true },
+        { id: 'p2', name: 'Bob',   score: 0, position: 0, isConnected: true },
+      ],
+      lobbyReadyPlayers: ['p2'], // só P2 chegou ao lobby
+    };
+    useGameStore.setState({ session, myPlayerId: 'p2' });
+    renderLobby();
+
+    // P1 ainda não está no lobby — não deve aparecer
+    expect(screen.queryByTestId('lobby-player-p1')).not.toBeInTheDocument();
+    // P2 está no lobby — deve aparecer
+    expect(screen.getByTestId('lobby-player-p2')).toBeInTheDocument();
+  });
+
+  it('contador exibe jogadores no lobby / maxPlayers', () => {
+    const session = {
+      ...makeSession(),
+      maxPlayers: 2 as const,
+      players: [
+        { id: 'p1', name: 'Alice', score: 0, position: 0, isConnected: true },
+        { id: 'p2', name: 'Bob',   score: 0, position: 0, isConnected: true },
+      ],
+      lobbyReadyPlayers: ['p2'],
+    };
+    useGameStore.setState({ session, myPlayerId: 'p2' });
+    renderLobby();
+
+    // contador deve mostrar "1 / 2" (1 no lobby de 2 possíveis)
+    expect(screen.getByTestId('player-count')).toHaveTextContent('1 / 2');
+  });
+
   // P1 entra antes dos demais — store tem só ele; cada GAME_STATE broadcast deve
   // atualizar a store para que P1 veja todos os peões ao entrar no tabuleiro (2–4 jogadores)
   it.each([2, 3, 4])(

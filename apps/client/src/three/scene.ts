@@ -74,21 +74,20 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   // Última posição conhecida de cada jogador — para calcular from/to da animação
   const pawnPositions = new Map<string, number>();
 
-  // Posição do peão ativo — câmera segue este ponto quando ocioso
   const activePos = new THREE.Vector3(BOARD_PATH[0].x, BOARD_PATH[0].y, BOARD_PATH[0].z);
 
-  // Enquanto true, active:player não redireciona a câmera (dado ainda rola)
   let diceRolling = false;
+  let pendingPawnSync: Player[] | null = null;
+  let activePlayerId: string | null = null;
 
   // DicePhysics — animação tween pura na zona de rolagem
   const dicePhysics = new DicePhysics(scene);
 
   // ─── gameBus — peões ────────────────────────────────────────────────────────
 
-  const unsubPlayers = gameBus.on<Player[]>('players:sync', (players) => {
+  function applyPawnPositions(players: Player[], animateOnlyId: string | null = null): void {
     players.forEach((player, i) => {
       if (!knownPlayers.has(player.id)) {
-        // Jogador novo: adiciona peão e teleporta para posição inicial
         pawnManager.addPawn(player.id, i);
         knownPlayers.add(player.id);
         pawnManager.movePawn(player.id, player.position);
@@ -96,19 +95,35 @@ export function initThreeScene(container: HTMLDivElement): () => void {
       } else {
         const oldPos = pawnPositions.get(player.id) ?? player.position;
         if (oldPos !== player.position) {
-          // Posição mudou: anima tile a tile
-          pawnManager.animatePawn(player.id, oldPos, player.position);
           pawnPositions.set(player.id, player.position);
+          if (animateOnlyId === null || player.id === animateOnlyId) {
+            const onDone = animateOnlyId !== null && player.id === animateOnlyId
+              ? () => { gameBus.emit('pawn:done', { playerId: player.id }); }
+              : undefined;
+            pawnManager.animatePawn(player.id, oldPos, player.position, onDone);
+            const tile = BOARD_PATH[player.position] ?? BOARD_PATH[0];
+            activePos.set(tile.x, tile.y, tile.z);
+          } else {
+            pawnManager.movePawn(player.id, player.position);
+          }
         }
-        // Posição igual: nada a fazer
       }
     });
+  }
+
+  const unsubPlayers = gameBus.on<Player[]>('players:sync', (players) => {
+    if (diceRolling) {
+      // Buffer: apply only after dice animation completes
+      pendingPawnSync = players;
+      return;
+    }
+    applyPawnPositions(players);
   });
 
-  const unsubActive = gameBus.on<{ tileIndex: number }>('active:player', ({ tileIndex }) => {
+  const unsubActive = gameBus.on<{ tileIndex: number; playerId?: string }>('active:player', ({ tileIndex, playerId }) => {
     const tile = BOARD_PATH[tileIndex] ?? BOARD_PATH[0];
     activePos.set(tile.x, tile.y, tile.z);
-    // Não redireciona câmera enquanto dado ainda rola — evita cortar a animação
+    if (playerId) activePlayerId = playerId;
     if (!diceRolling) {
       cameraController.snapToPlayer(activePos);
     }
@@ -130,8 +145,23 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   const unsubDiceDone = gameBus.on<{ face: number }>('dice:done', () => {
     diceRolling = false;
-    // Retorna câmera ao peão ativo (já atualizado pelo active:player durante o roll)
-    cameraController.snapToPlayer(activePos);
+    // Pre-compute activePos destination so camera can pan there immediately
+    const synced = pendingPawnSync;
+    const animId = activePlayerId;
+    pendingPawnSync = null;
+    if (synced && animId) {
+      const active = synced.find((p) => p.id === animId);
+      if (active) {
+        const tile = BOARD_PATH[active.position] ?? BOARD_PATH[0];
+        activePos.set(tile.x, tile.y, tile.z);
+      }
+    }
+    // Smooth camera return (lerp-based, not instant cut)
+    cameraController.smoothReturnToPlayer();
+    // Delay pawn animation so camera settles before pawn moves
+    setTimeout(() => {
+      if (synced) applyPawnPositions(synced, animId);
+    }, 700);
   });
 
   // Tile final do tabuleiro — alvo do zoom de vitória

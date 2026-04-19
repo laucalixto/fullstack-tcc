@@ -70,7 +70,7 @@ export function LobbyWaiting({
               </p>
             ) : (
               <p className="text-secondary text-lg max-w-2xl mx-auto">
-                A partida começará assim que o facilitador iniciar a sessão.
+                A partida começará assim que todos acessarem o início da sessão.
               </p>
             )}
           </div>
@@ -85,7 +85,7 @@ export function LobbyWaiting({
                 data-testid="player-count"
                 className="text-sm font-bold text-primary bg-primary/10 px-3 py-1 rounded-full"
               >
-                {players.length}
+                {players.length} / {maxPlayers}
               </span>
             </div>
 

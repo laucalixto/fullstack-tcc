@@ -437,3 +437,27 @@ describe('SessionManager — finishGame', () => {
     expect(() => sm.finishGame(id)).toThrow();
   });
 });
+
+// ─── RED: renamePlayer ─────────────────────────────────────────────────────────
+describe('SessionManager — renamePlayer', () => {
+  it('atualiza o nome completo (nome + sobrenome) do jogador na sessão', () => {
+    const sm = new SessionManager();
+    const { pin } = sm.createSession('fac-1');
+    const { playerId } = sm.joinSession(pin, 'Jogador');
+    const sessionId = sm.getByPin(pin)!.id;
+    sm.renamePlayer(sessionId, playerId, 'Alice Silva');
+    const player = sm.getById(sessionId)!.players.find((p) => p.id === playerId);
+    expect(player?.name).toBe('Alice Silva');
+  });
+
+  it('lança SESSION_NOT_FOUND para sessão inválida', () => {
+    const sm = new SessionManager();
+    expect(() => sm.renamePlayer('bad-id', 'p1', 'Alice Silva')).toThrow('SESSION_NOT_FOUND');
+  });
+
+  it('lança PLAYER_NOT_FOUND para jogador inválido', () => {
+    const sm = new SessionManager();
+    const { id } = sm.createSession('fac-1');
+    expect(() => sm.renamePlayer(id, 'unknown-player', 'Alice Silva')).toThrow('PLAYER_NOT_FOUND');
+  });
+});

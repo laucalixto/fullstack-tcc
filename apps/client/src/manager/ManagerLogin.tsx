@@ -10,6 +10,7 @@ interface ManagerLoginProps {
 export function ManagerLogin({ onLogin, error, isLoading = false }: ManagerLoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const canSubmit = !isLoading && email.trim().length > 0 && password.length > 0;
 
@@ -69,15 +70,28 @@ export function ManagerLogin({ onLogin, error, isLoading = false }: ManagerLogin
                   Esqueci minha senha
                 </a>
               </div>
-              <input
-                data-testid="login-password"
-                id="login-pw"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className={inputClass}
-              />
+              <div className="relative">
+                <input
+                  data-testid="login-password"
+                  id="login-pw"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className={`${inputClass} pr-12`}
+                />
+                <button
+                  type="button"
+                  data-testid="toggle-password-visibility"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40 hover:text-primary transition-colors focus:outline-none"
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  <span className="material-symbols-outlined text-lg">
+                    {showPassword ? 'visibility_off' : 'visibility'}
+                  </span>
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -122,7 +136,7 @@ export function ManagerLogin({ onLogin, error, isLoading = false }: ManagerLogin
 
         {/* System status */}
         <div className="mt-8 flex items-center gap-4 p-4 bg-surface-container-low rounded-lg border-l-4 border-secondary/30">
-          <span className="text-secondary text-lg">ℹ️</span>
+          <span className="material-symbols-outlined text-secondary text-lg">info</span>
           <p className="text-[10px] uppercase tracking-tight font-medium text-on-surface/60">
             Sistema monitorado conforme protocolos de segurança NR-01. Mantenha suas credenciais protegidas.
           </p>

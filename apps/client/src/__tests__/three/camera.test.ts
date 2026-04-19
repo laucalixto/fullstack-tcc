@@ -100,6 +100,25 @@ describe('CameraController', () => {
     });
   });
 
+  describe('smoothReturnToPlayer', () => {
+    it('update() logo após smoothReturnToPlayer chama camera.position.lerp (retorno suave)', () => {
+      const target = new THREE.Vector3(3, 0, 3);
+      controller.smoothReturnToPlayer();
+      vi.mocked(camera.position.lerp).mockClear();
+      vi.mocked(camera.position.copy).mockClear();
+      controller.update(target);
+      expect(camera.position.lerp).toHaveBeenCalled();
+    });
+
+    it('update() após smoothReturnToPlayer NÃO usa camera.position.copy', () => {
+      const target = new THREE.Vector3(3, 0, 3);
+      controller.smoothReturnToPlayer();
+      vi.mocked(camera.position.copy).mockClear();
+      controller.update(target);
+      expect(camera.position.copy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('panToDice', () => {
     it('copia nova posição para camera.position (não lerp — snap imediato)', () => {
       const dicePos = new THREE.Vector3(12, 0, 4);
