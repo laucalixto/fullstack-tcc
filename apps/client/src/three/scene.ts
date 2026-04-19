@@ -1,19 +1,15 @@
 import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { BOARD_PATH } from '@safety-board/shared';
 import type { Player } from '@safety-board/shared';
 import { CameraController } from './camera';
 import { PawnManager } from './PawnManager';
+import { DicePhysics, DICE_ZONE } from './dice/DicePhysics';
 import { gameBus } from './EventBus';
+import { computeTileHSL } from './tileColors';
 
-// ─── Constantes de cena ───────────────────────────────────────────────────────
-
-const TILE_COLORS: Record<number, number> = {
-  0: 0x4caf50, // grupo 1 — verde (NR-06)
-  1: 0x2196f3, // grupo 2 — azul (NR-35)
-  2: 0xe53935, // grupo 3 — vermelho (NR-33)
-  3: 0xff9800, // grupo 4 — laranja (subida final)
-};
+// ─── Grupos de tiles ──────────────────────────────────────────────────────────
 
 function tileGroup(index: number): number {
   return Math.min(Math.floor(index / 10), 3);
@@ -22,7 +18,7 @@ function tileGroup(index: number): number {
 // ─── Scene builder ────────────────────────────────────────────────────────────
 
 export function initThreeScene(container: HTMLDivElement): () => void {
-  // Renderer — usa window.inner* como fallback se o container ainda não tiver dimensões
+  // Renderer
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   const initW = container.clientWidth  || window.innerWidth;
@@ -73,14 +69,35 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   const cameraController = new CameraController(camera, controls);
 
-  // PawnManager — gerencia peões no tabuleiro
+  // PawnManager
   const pawnManager = new PawnManager(scene);
   const knownPlayers = new Set<string>();
 
-  // Posição do jogador ativo — câmera segue este ponto
+  // Posição do peão ativo — câmera segue este ponto quando ocioso
   const activePos = new THREE.Vector3(BOARD_PATH[0].x, BOARD_PATH[0].y, BOARD_PATH[0].z);
 
-  // gameBus: sincroniza peões com o estado do jogo (emitido pelo GamePage via socket)
+  // Enquanto true, active:player não redireciona a câmera (dado ainda rola)
+  let diceRolling = false;
+
+  // ─── Physics World (cannon-es) ─────────────────────────────────────────────
+
+  const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
+  world.broadphase = new CANNON.NaiveBroadphase();
+
+  // Plano de colisão invisível na zona do dado
+  const floorBody = new CANNON.Body({
+    mass: 0,
+    shape: new CANNON.Plane(),
+    position: new CANNON.Vec3(DICE_ZONE.x, DICE_ZONE.y - 0.5, DICE_ZONE.z),
+  });
+  floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  world.addBody(floorBody);
+
+  // DicePhysics — cubo físico na zona de rolagem
+  const dicePhysics = new DicePhysics(scene, world);
+
+  // ─── gameBus — peões ────────────────────────────────────────────────────────
+
   const unsubPlayers = gameBus.on<Player[]>('players:sync', (players) => {
     players.forEach((player, i) => {
       if (!knownPlayers.has(player.id)) {
@@ -91,21 +108,43 @@ export function initThreeScene(container: HTMLDivElement): () => void {
     });
   });
 
-  // gameBus: câmera salta para o peão do jogador ativo na troca de turno
   const unsubActive = gameBus.on<{ tileIndex: number }>('active:player', ({ tileIndex }) => {
     const tile = BOARD_PATH[tileIndex] ?? BOARD_PATH[0];
     activePos.set(tile.x, tile.y, tile.z);
+    // Não redireciona câmera enquanto dado ainda rola — evita cortar a animação
+    if (!diceRolling) {
+      cameraController.snapToPlayer(activePos);
+    }
+  });
+
+  // ─── gameBus — dado ─────────────────────────────────────────────────────────
+
+  const diceZoneVec = new THREE.Vector3(DICE_ZONE.x, DICE_ZONE.y, DICE_ZONE.z);
+
+  const unsubDiceThrow = gameBus.on<{ position: typeof DICE_ZONE }>('dice:throw', ({ position }) => {
+    diceRolling = true;
+    dicePhysics.throw(position);
+    cameraController.panToDice(diceZoneVec);
+  });
+
+  const unsubDiceResult = gameBus.on<{ face: number }>('dice:result', ({ face }) => {
+    dicePhysics.setResult(face);
+  });
+
+  const unsubDiceDone = gameBus.on<{ face: number }>('dice:done', () => {
+    diceRolling = false;
+    // Retorna câmera ao peão ativo (já atualizado pelo active:player durante o roll)
     cameraController.snapToPlayer(activePos);
   });
 
-  // Board tiles
+  // ─── Board tiles com variação de cor ───────────────────────────────────────
+
   const tileGeo = new THREE.BoxGeometry(1, 0.3, 1);
   BOARD_PATH.forEach((tile) => {
-    const mat = new THREE.MeshStandardMaterial({
-      color: TILE_COLORS[tileGroup(tile.index)],
-      roughness: 0.7,
-      metalness: 0.1,
-    });
+    const group = tileGroup(tile.index);
+    const [h, s, l] = computeTileHSL(tile.index, group);
+    const color = new THREE.Color().setHSL(h, s, l);
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.1 });
     const mesh = new THREE.Mesh(tileGeo, mat);
     mesh.position.set(tile.x, tile.y, tile.z);
     mesh.castShadow = true;
@@ -113,7 +152,7 @@ export function initThreeScene(container: HTMLDivElement): () => void {
     scene.add(mesh);
   });
 
-  // Ground plane (base block visual)
+  // Ground plane
   const groundGeo = new THREE.BoxGeometry(12, 0.2, 10);
   const groundMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.9 });
   const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -121,18 +160,23 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // Animation loop
+  // ─── Animation loop ─────────────────────────────────────────────────────────
+
+  const clock = new THREE.Clock();
   let animId: number;
 
   function animate() {
     animId = requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+    dicePhysics.update(delta);
     cameraController.update(activePos);
     renderer.render(scene, camera);
   }
 
   animate();
 
-  // Resize handler
+  // ─── Resize ─────────────────────────────────────────────────────────────────
+
   function onResize() {
     const w = container.clientWidth  || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
@@ -142,12 +186,17 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   }
   window.addEventListener('resize', onResize);
 
-  // Cleanup
+  // ─── Cleanup ─────────────────────────────────────────────────────────────────
+
   return () => {
     cancelAnimationFrame(animId);
     window.removeEventListener('resize', onResize);
     unsubPlayers();
     unsubActive();
+    unsubDiceThrow();
+    unsubDiceResult();
+    unsubDiceDone();
+    dicePhysics.dispose();
     controls.dispose();
     renderer.dispose();
     container.removeChild(renderer.domElement);

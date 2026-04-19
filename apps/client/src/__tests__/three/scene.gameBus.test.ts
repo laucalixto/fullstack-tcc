@@ -46,15 +46,21 @@ vi.mock('three', () => {
   return {
     WebGLRenderer: MockRenderer,
     Scene: MockScene,
-    Color: vi.fn(),
+    Color: vi.fn().mockImplementation(() => ({ setHSL: vi.fn().mockReturnThis() })),
     Fog: vi.fn(),
     PerspectiveCamera: MockCamera,
     AmbientLight: MockLight,
     DirectionalLight: MockLight,
     BoxGeometry: vi.fn(),
     MeshStandardMaterial: vi.fn(),
-    Mesh: vi.fn().mockImplementation(() => ({ position: { set: vi.fn() }, castShadow: false, receiveShadow: false })),
+    Mesh: vi.fn().mockImplementation(() => ({
+      position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+      quaternion: { set: vi.fn(), slerpQuaternions: vi.fn(), x: 0, y: 0, z: 0, w: 1 },
+      castShadow: false, receiveShadow: false, visible: false,
+    })),
     Vector3: Vec3,
+    Quaternion: vi.fn().mockImplementation(() => ({ setFromEuler: vi.fn().mockReturnThis(), x: 0, y: 0, z: 0, w: 1 })),
+    Euler: vi.fn(),
     Clock: vi.fn().mockImplementation(() => ({ getDelta: vi.fn().mockReturnValue(0) })),
     PCFSoftShadowMap: 1,
     PCFShadowMap: 2,
@@ -73,11 +79,36 @@ vi.mock('../../three/camera', () => ({
   CameraController: vi.fn().mockImplementation(() => ({
     update: vi.fn(),
     snapToPlayer: vi.fn(),
+    panToDice: vi.fn(),
   })),
 }));
 
 vi.mock('../../three/PawnManager', () => ({
-  PawnManager: vi.fn(() => pawnMock), // retorna sempre o mesmo objeto de espião
+  PawnManager: vi.fn(() => pawnMock),
+}));
+
+vi.mock('cannon-es', () => ({
+  World:          vi.fn().mockImplementation(() => ({
+    addBody: vi.fn(), removeBody: vi.fn(), step: vi.fn(), bodies: [],
+    broadphase: null,
+  })),
+  Body:           vi.fn().mockImplementation(() => ({
+    position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+    velocity: { set: vi.fn(), setZero: vi.fn() },
+    angularVelocity: { set: vi.fn(), setZero: vi.fn() },
+    quaternion: { x: 0, y: 0, z: 0, w: 1, setFromEuler: vi.fn() },
+  })),
+  Box:            vi.fn(),
+  Vec3:           vi.fn(() => ({ x: 0, y: 0, z: 0 })),
+  Plane:          vi.fn(),
+  NaiveBroadphase: vi.fn(),
+}));
+
+vi.mock('../../three/dice/DicePhysics', () => ({
+  DicePhysics: vi.fn().mockImplementation(() => ({
+    throw: vi.fn(), setResult: vi.fn(), update: vi.fn(), dispose: vi.fn(),
+  })),
+  DICE_ZONE: { x: 12, y: 0.5, z: 4 },
 }));
 
 // ─── Imports após mocks ───────────────────────────────────────────────────────
@@ -142,5 +173,65 @@ describe('scene — gameBus → PawnManager', () => {
     pawnMock.addPawn.mockClear();
     gameBus.emit('players:sync', [makePlayer('p_new')]);
     expect(pawnMock.addPawn).not.toHaveBeenCalled();
+  });
+});
+
+// ─── RED: câmera durante rolar do dado ────────────────────────────────────────
+// Bug: TURN_CHANGED dispara active:player enquanto dado rola →
+// snapToPlayer() zera lastInteractionTime → câmera volta ao tabuleiro imediatamente,
+// antes do dado resolver. O jogador não vê o dado.
+//
+// Comportamento correto:
+//   - dice:throw → panToDice chamado
+//   - active:player DURANTE roll → snapToPlayer NÃO chamado (câmera permanece no dado)
+//   - dice:done → snapToPlayer chamado (câmera volta ao peão)
+
+import { CameraController } from '../../three/camera';
+
+describe('scene — câmera e dado', () => {
+  let container: HTMLDivElement;
+  let cleanup: () => void;
+  let cameraCtrl: { snapToPlayer: ReturnType<typeof vi.fn>; panToDice: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth',  { get: () => 800, configurable: true });
+    Object.defineProperty(container, 'clientHeight', { get: () => 600, configurable: true });
+    cleanup = initThreeScene(container);
+    // Captura a instância criada pelo initThreeScene
+    cameraCtrl = vi.mocked(CameraController).mock.results[0].value as typeof cameraCtrl;
+  });
+
+  afterEach(() => {
+    try { cleanup(); } catch { /* já limpo */ }
+  });
+
+  it('dice:throw chama panToDice na câmera', () => {
+    gameBus.emit('dice:throw', { position: { x: 12, y: 0.5, z: 4 } });
+    expect(cameraCtrl.panToDice).toHaveBeenCalled();
+  });
+
+  it('active:player enquanto dado rola NÃO chama snapToPlayer', () => {
+    gameBus.emit('dice:throw', { position: { x: 12, y: 0.5, z: 4 } });
+    cameraCtrl.snapToPlayer.mockClear(); // ignora eventuais chamadas anteriores
+    // TURN_CHANGED → active:player chega enquanto dado ainda rola
+    gameBus.emit('active:player', { tileIndex: 5 });
+    expect(cameraCtrl.snapToPlayer).not.toHaveBeenCalled();
+  });
+
+  it('dice:done chama snapToPlayer para retornar ao peão', () => {
+    gameBus.emit('dice:throw', { position: { x: 12, y: 0.5, z: 4 } });
+    cameraCtrl.snapToPlayer.mockClear();
+    gameBus.emit('dice:done', { face: 3 });
+    expect(cameraCtrl.snapToPlayer).toHaveBeenCalled();
+  });
+
+  it('active:player APÓS dice:done chama snapToPlayer normalmente', () => {
+    gameBus.emit('dice:throw', { position: { x: 12, y: 0.5, z: 4 } });
+    gameBus.emit('dice:done', { face: 3 });
+    cameraCtrl.snapToPlayer.mockClear();
+    gameBus.emit('active:player', { tileIndex: 8 });
+    expect(cameraCtrl.snapToPlayer).toHaveBeenCalled();
   });
 });

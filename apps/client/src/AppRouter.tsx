@@ -1,6 +1,6 @@
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
-import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload, GameStartingPayload } from '@safety-board/shared';
+import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload, GameStartingPayload, RoomJoinedPayload } from '@safety-board/shared';
 
 import { PinEntry } from './lobby/PinEntry';
 import { CharacterSelect } from './lobby/CharacterSelect';
@@ -41,10 +41,12 @@ function PinEntryPage() {
   const handleJoin = useCallback((pin: string) => {
     setRoomError(undefined);
     socket.emit(EVENTS.ROOM_JOIN, { pin, playerName: 'Jogador' });
+    // ROOM_JOINED traz o playerId real (UUID gerado pelo servidor)
+    socket.once(EVENTS.ROOM_JOINED, ({ playerId }: RoomJoinedPayload) => {
+      setMyPlayerId(playerId);
+    });
     socket.once(EVENTS.GAME_STATE, (session) => {
       setSession(session);
-      const myId = socket.id ?? '';
-      setMyPlayerId(myId);
       navigate('/personagem');
     });
     socket.once(EVENTS.ROOM_ERROR, (payload: RoomErrorPayload) => {

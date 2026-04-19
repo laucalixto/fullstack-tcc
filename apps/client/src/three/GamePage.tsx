@@ -11,7 +11,8 @@ import { ChallengeModal } from '../lobby/ChallengeModal';
 import { useGameStore } from '../stores/gameStore';
 import { socket } from '../ws/socket';
 import { gameBus } from './EventBus';
-import type { TurnChangedPayload } from '@safety-board/shared';
+import type { TurnChangedPayload, TurnResultPayload } from '@safety-board/shared';
+import { DICE_ZONE } from './dice/DicePhysics';
 
 interface QuizQuestionPayload {
   sessionId: string;
@@ -35,6 +36,7 @@ export function GamePage() {
 
   const [quizPayload, setQuizPayload] = useState<QuizQuestionPayload | null>(null);
   const [quizResult, setQuizResult] = useState<'correct' | 'incorrect' | undefined>();
+  const [isDiceRolling, setIsDiceRolling] = useState(false);
 
   // Sincroniza o estado inicial ao montar: GAME_STATE pode ter chegado antes do GamePage existir
   useEffect(() => {
@@ -61,6 +63,10 @@ export function GamePage() {
       }
     }
 
+    function onTurnResult({ dice }: TurnResultPayload) {
+      gameBus.emit('dice:result', { face: dice });
+    }
+
     function onQuizQuestion(payload: QuizQuestionPayload) {
       setQuizResult(undefined);
       setQuizPayload(payload);
@@ -78,23 +84,32 @@ export function GamePage() {
 
     socket.on(EVENTS.GAME_STATE,    onGameState);
     socket.on(EVENTS.TURN_CHANGED,  onTurnChanged);
+    socket.on(EVENTS.TURN_RESULT,   onTurnResult);
     socket.on(EVENTS.QUIZ_QUESTION, onQuizQuestion);
     socket.on(EVENTS.QUIZ_RESULT,   onQuizResult);
     socket.on(EVENTS.GAME_FINISHED, onGameFinished);
 
+    const unsubDiceDone = gameBus.on<{ face: number }>('dice:done', () => {
+      setIsDiceRolling(false);
+    });
+
     return () => {
       socket.off(EVENTS.GAME_STATE,    onGameState);
       socket.off(EVENTS.TURN_CHANGED,  onTurnChanged);
+      socket.off(EVENTS.TURN_RESULT,   onTurnResult);
       socket.off(EVENTS.QUIZ_QUESTION, onQuizQuestion);
       socket.off(EVENTS.QUIZ_RESULT,   onQuizResult);
       socket.off(EVENTS.GAME_FINISHED, onGameFinished);
+      unsubDiceDone();
     };
   }, [navigate, setSession, setGameResult]);
 
   const handleRollDice = useCallback(() => {
-    if (!session || !myPlayerId) return;
+    if (!session || !myPlayerId || isDiceRolling) return;
+    setIsDiceRolling(true);
     socket.emit(EVENTS.TURN_ROLL, { sessionId: session.id, playerId: myPlayerId });
-  }, [session, myPlayerId]);
+    gameBus.emit('dice:throw', { position: DICE_ZONE });
+  }, [session, myPlayerId, isDiceRolling]);
 
   const handleAnswer = useCallback((selectedText: string) => {
     if (!quizPayload) return;
@@ -159,6 +174,7 @@ export function GamePage() {
         <button
           data-testid="btn-roll-dice"
           onClick={handleRollDice}
+          disabled={isDiceRolling}
           style={{
             position: 'absolute',
             bottom: '2rem',
@@ -167,9 +183,9 @@ export function GamePage() {
             pointerEvents: 'auto',
             zIndex: 10,
           }}
-          className="px-8 py-4 bg-primary text-white font-black uppercase tracking-widest rounded-xl shadow-2xl text-sm hover:scale-105 active:scale-95 transition-transform"
+          className="px-8 py-4 bg-primary text-white font-black uppercase tracking-widest rounded-xl shadow-2xl text-sm hover:scale-105 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
         >
-          Rolar Dado
+          {isDiceRolling ? 'Rolando...' : 'Rolar Dado'}
         </button>
       )}
 

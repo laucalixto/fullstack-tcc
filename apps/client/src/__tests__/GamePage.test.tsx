@@ -219,4 +219,27 @@ describe('GamePage', () => {
     act(() => { triggerSocket(EVENTS.TURN_CHANGED, { playerId: 'p1' }); });
     expect(gameBus.emit).toHaveBeenCalledWith('active:player', { tileIndex: 7 });
   });
+
+  // ─── Dado (Fase F) ────────────────────────────────────────────────────────────
+
+  it('clicar em Rolar Dado emite dice:throw no gameBus com posição da zona', () => {
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1', isMyTurn: true });
+    renderGamePage();
+    fireEvent.click(screen.getByTestId('btn-roll-dice'));
+    expect(gameBus.emit).toHaveBeenCalledWith('dice:throw', expect.objectContaining({ position: expect.objectContaining({ x: expect.any(Number) }) }));
+  });
+
+  it('botão fica desabilitado após clicar (isDiceRolling)', () => {
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1', isMyTurn: true });
+    renderGamePage();
+    fireEvent.click(screen.getByTestId('btn-roll-dice'));
+    expect(screen.getByTestId('btn-roll-dice')).toBeDisabled();
+  });
+
+  it('TURN_RESULT emite dice:result no gameBus com a face do dado', () => {
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1', isMyTurn: true });
+    renderGamePage();
+    act(() => { triggerSocket(EVENTS.TURN_RESULT, { playerId: 'p1', dice: 4, newPosition: 4 }); });
+    expect(gameBus.emit).toHaveBeenCalledWith('dice:result', { face: 4 });
+  });
 });

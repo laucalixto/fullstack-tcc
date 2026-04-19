@@ -54,8 +54,10 @@ function triggerOnce(event: string, payload: unknown) {
 // ─── Imports após mocks ───────────────────────────────────────────────────────
 
 import { AppRouter } from '../../AppRouter';
+import { useGameStore } from '../../stores/gameStore';
+import { socket } from '../../ws/socket';
 import { EVENTS } from '@safety-board/shared';
-import type { RoomErrorPayload } from '@safety-board/shared';
+import type { RoomErrorPayload, GameSession } from '@safety-board/shared';
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
@@ -65,6 +67,23 @@ function renderPinEntry() {
       <AppRouter />
     </MemoryRouter>,
   );
+}
+
+function makeSession(overrides: Partial<GameSession> = {}): GameSession {
+  return {
+    id: 'session-1',
+    pin: '123456',
+    name: 'Teste',
+    shareLink: '/sala/123456',
+    facilitatorId: 'fac-1',
+    state: 'WAITING',
+    players: [{ id: 'uuid-servidor-123', name: 'Jogador', score: 0, position: 0, isConnected: true }],
+    currentPlayerIndex: 0,
+    createdAt: Date.now(),
+    quizConfig: { activeNormIds: ['NR-06'], timeoutSeconds: 30 },
+    maxPlayers: 2,
+    ...overrides,
+  };
 }
 
 // ─── Testes ──────────────────────────────────────────────────────────────────
@@ -153,5 +172,56 @@ describe('PinEntryPage — tratamento de ROOM_ERROR', () => {
     });
 
     expect(mockNavigate).not.toHaveBeenCalledWith('/personagem');
+  });
+});
+
+// ─── RED: Bug — myPlayerId deve ser o UUID do servidor, não socket.id ─────────
+// O servidor emite ROOM_JOINED com o playerId real (randomUUID).
+// O cliente estava usando socket.id, que nunca coincide → isMyTurn sempre false
+// → botão "Rolar Dado" nunca aparece.
+//
+// Fix: usar o playerId de ROOM_JOINED, não socket.id.
+
+describe('PinEntryPage — playerId vem do servidor (ROOM_JOINED)', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear();
+    Object.keys(socketOnceHandlers).forEach((k) => { delete socketOnceHandlers[k]; });
+    useGameStore.setState({ session: null, myPlayerId: null, isMyTurn: false });
+  });
+
+  it('registra listener para ROOM_JOINED ao tentar entrar na sala', () => {
+    renderPinEntry();
+    fireEvent.change(screen.getByTestId('pin-input'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByTestId('join-button'));
+    const onceEvents = vi.mocked(socket.once).mock.calls.map(([ev]) => ev);
+    expect(onceEvents).toContain(EVENTS.ROOM_JOINED);
+  });
+
+  it('define myPlayerId com o UUID recebido em ROOM_JOINED, não socket.id', () => {
+    renderPinEntry();
+    fireEvent.change(screen.getByTestId('pin-input'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByTestId('join-button'));
+
+    act(() => {
+      // Servidor envia ROOM_JOINED com UUID real
+      triggerOnce(EVENTS.ROOM_JOINED, { sessionId: 'session-1', playerId: 'uuid-servidor-123', pin: '123456' });
+      // Servidor envia GAME_STATE com a sessão
+      triggerOnce(EVENTS.GAME_STATE, makeSession());
+    });
+
+    expect(useGameStore.getState().myPlayerId).toBe('uuid-servidor-123');
+  });
+
+  it('isMyTurn é true quando myPlayerId coincide com o jogador ativo na sessão', () => {
+    renderPinEntry();
+    fireEvent.change(screen.getByTestId('pin-input'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByTestId('join-button'));
+
+    act(() => {
+      triggerOnce(EVENTS.ROOM_JOINED, { sessionId: 'session-1', playerId: 'uuid-servidor-123', pin: '123456' });
+      triggerOnce(EVENTS.GAME_STATE, makeSession({ state: 'ACTIVE', currentPlayerIndex: 0 }));
+    });
+
+    expect(useGameStore.getState().isMyTurn).toBe(true);
   });
 });
