@@ -278,6 +278,70 @@ describe('GamePage', () => {
     expect(screen.getByTestId('btn-roll-dice')).toBeDisabled();
   });
 
+  it('botão desabilitado enquanto peão do turno anterior ainda se move (isPawnSettling)', () => {
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p2', isMyTurn: false });
+    renderGamePage();
+
+    // TURN_RESULT: Player 1 rolou → dice:rollStart → isPawnSettling=true
+    act(() => { triggerSocket(EVENTS.TURN_RESULT, { playerId: 'p1', dice: 3, newPosition: 3 }); });
+
+    // TURN_CHANGED: agora é a vez de Player 2
+    act(() => {
+      useGameStore.setState({ isMyTurn: true });
+      triggerSocket(EVENTS.TURN_CHANGED, { playerId: 'p2' });
+    });
+
+    expect(screen.getByTestId('btn-roll-dice')).toBeDisabled();
+  });
+
+  it('sem quiz: botão habilitado após pawn:done (TURN_CHANGED já chegou antes)', () => {
+    // Sem quiz: TURN_CHANGED chega junto com TURN_RESULT, antes do pawn:done
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p2', isMyTurn: false });
+    renderGamePage();
+
+    act(() => { triggerSocket(EVENTS.TURN_RESULT, { playerId: 'p1', dice: 3, newPosition: 3 }); });
+    act(() => {
+      useGameStore.setState({ isMyTurn: true });
+      triggerSocket(EVENTS.TURN_CHANGED, { playerId: 'p2' }); // chega antes do pawn:done
+    });
+
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); }); // último evento → libera
+    expect(screen.getByTestId('btn-roll-dice')).not.toBeDisabled();
+  });
+
+  it('com quiz: botão desabilitado após pawn:done se TURN_CHANGED ainda não chegou', () => {
+    // Com quiz: pawn:done dispara antes de TURN_CHANGED (quiz ainda sendo respondido)
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p2', isMyTurn: false });
+    renderGamePage();
+
+    act(() => { triggerSocket(EVENTS.TURN_RESULT, { playerId: 'p1', dice: 3, newPosition: 3 }); });
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); }); // peão parou, quiz aberto
+
+    // isMyTurn=true mas TURN_CHANGED ainda não chegou — botão deve continuar bloqueado
+    act(() => { useGameStore.setState({ isMyTurn: true }); });
+    expect(screen.getByTestId('btn-roll-dice')).toBeDisabled();
+
+    // Quiz respondido → TURN_CHANGED → libera
+    act(() => { triggerSocket(EVENTS.TURN_CHANGED, { playerId: 'p2' }); });
+    expect(screen.getByTestId('btn-roll-dice')).not.toBeDisabled();
+  });
+
+  it('botão Rolar Dado desabilitado enquanto modal de quiz está aberto', () => {
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1', isMyTurn: true });
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.QUIZ_QUESTION, {
+        sessionId: 'session-1',
+        playerId: 'p1',
+        question: makeQuestion(),
+        timeoutSeconds: 30,
+      });
+    });
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
+    expect(screen.getByTestId('challenge-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('btn-roll-dice')).toBeDisabled();
+  });
+
   it('TURN_RESULT emite dice:result no gameBus com a face do dado', () => {
     useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1', isMyTurn: true });
     renderGamePage();

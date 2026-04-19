@@ -453,10 +453,10 @@ describe('scene — retorno suave e animação seletiva após dado', () => {
     expect(diceInst.throw).toHaveBeenCalled();
   });
 
-  it('dice:rollStart em não-rolador chama panToDice para câmera ir ao dado', () => {
+  it('dice:rollStart em não-rolador NÃO força câmera para o dado (câmera livre para o jogador)', () => {
     gameBus.emit('dice:rollStart', {});
 
-    expect(cameraCtrl.panToDice).toHaveBeenCalled();
+    expect(cameraCtrl.panToDice).not.toHaveBeenCalled();
   });
 
   it('dice:rollStart em rolador local NÃO duplica dicePhysics.throw', () => {

@@ -141,11 +141,11 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   // Todos os clientes veem o dado: dice:rollStart dispara throw() nos não-roladores
   // → dice:done dispara em todos ao término (~2s), sincronizando animação dos peões
+  // Câmera NÃO é forçada: jogador não-ativo pode movimentar livremente e ver o dado se quiser
   const unsubRollStart = gameBus.on('dice:rollStart', () => {
     if (localDiceActive) return; // rolador já iniciou via dice:throw
     diceRolling = true;
     dicePhysics.throw(DICE_ZONE);
-    cameraController.panToDice(diceZoneVec);
   });
 
   // dice:rollEnd ignorado — dice:done (via DicePhysics) sincroniza todos os clientes

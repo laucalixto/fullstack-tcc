@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EVENTS } from '@safety-board/shared';
 import type { GameSession, GameResultPayload } from '@safety-board/shared';
@@ -38,7 +38,19 @@ export function GamePage() {
   const [quizPending, setQuizPending] = useState<QuizQuestionPayload | null>(null);
   const [quizResult, setQuizResult] = useState<'correct' | 'incorrect' | undefined>();
   const [isDiceRolling, setIsDiceRolling] = useState(false);
+  const [isPawnSettling, setIsPawnSettling] = useState(false);
   const [victoryPending, setVictoryPending] = useState(false);
+
+  // Dual-condition: isPawnSettling só limpa quando pawn:done E TURN_CHANGED ocorrerem
+  const settlePawnDone    = useRef(false);
+  const settleTurnChanged = useRef(false);
+  const checkSettle = useCallback(() => {
+    if (settlePawnDone.current && settleTurnChanged.current) {
+      settlePawnDone.current    = false;
+      settleTurnChanged.current = false;
+      setIsPawnSettling(false);
+    }
+  }, []);
 
   // Sincroniza o estado inicial ao montar: GAME_STATE pode ter chegado antes do GamePage existir
   useEffect(() => {
@@ -65,6 +77,9 @@ export function GamePage() {
       }
       // Sinaliza fim da jogada para não-roladores aplicarem o buffer de peões
       gameBus.emit('dice:rollEnd', {});
+      // Dual-condition: TURN_CHANGED ocorreu — verifica se pawn:done já veio
+      settleTurnChanged.current = true;
+      checkSettle();
     }
 
     function onTurnResult({ dice }: TurnResultPayload) {
@@ -100,7 +115,17 @@ export function GamePage() {
       setIsDiceRolling(false);
     });
 
+    // Marca início de settling: alguém rolou → peão vai se mover; reseta condições
+    const unsubRollStart = gameBus.on('dice:rollStart', () => {
+      settlePawnDone.current    = false;
+      settleTurnChanged.current = false;
+      setIsPawnSettling(true);
+    });
+
     const unsubPawnDone = gameBus.on('pawn:done', () => {
+      // Dual-condition: pawn:done ocorreu — verifica se TURN_CHANGED já veio
+      settlePawnDone.current = true;
+      checkSettle();
       setQuizPending((pending) => {
         if (pending) setQuizPayload(pending);
         return null;
@@ -123,16 +148,17 @@ export function GamePage() {
       socket.off(EVENTS.QUIZ_RESULT,   onQuizResult);
       socket.off(EVENTS.GAME_FINISHED, onGameFinished);
       unsubDiceDone();
+      unsubRollStart();
       unsubPawnDone();
     };
   }, [navigate, setSession, setGameResult]);
 
   const handleRollDice = useCallback(() => {
-    if (!session || !myPlayerId || isDiceRolling) return;
+    if (!session || !myPlayerId || isDiceRolling || isPawnSettling || quizPayload) return;
     setIsDiceRolling(true);
     socket.emit(EVENTS.TURN_ROLL, { sessionId: session.id, playerId: myPlayerId });
     gameBus.emit('dice:throw', { position: DICE_ZONE });
-  }, [session, myPlayerId, isDiceRolling]);
+  }, [session, myPlayerId, isDiceRolling, isPawnSettling, quizPayload]);
 
   const handleAnswer = useCallback((selectedText: string) => {
     if (!quizPayload) return;
@@ -163,6 +189,17 @@ export function GamePage() {
     }, 3000);
     return () => clearTimeout(timer);
   }, [quizPending]);
+
+  // Fallback: caso pawn:done nunca dispare (ex: peão sem movimento), assume-o após 5s
+  // Ainda respeita TURN_CHANGED — não libera enquanto quiz do adversário estiver ativo
+  useEffect(() => {
+    if (!isPawnSettling) return;
+    const timer = setTimeout(() => {
+      settlePawnDone.current = true;
+      checkSettle();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [isPawnSettling, checkSettle]);
 
   // Fallback: trigger victory camera after 3s if pawn:done never fires
   useEffect(() => {
@@ -230,7 +267,7 @@ export function GamePage() {
             <button
               data-testid="btn-roll-dice"
               onClick={handleRollDice}
-              disabled={isDiceRolling}
+              disabled={isDiceRolling || isPawnSettling || !!quizPayload}
               className="relative h-32 w-32 rounded-full bg-primary shadow-2xl flex flex-col items-center justify-center text-white border-4 border-white/30 active:scale-95 hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
             >
               <span className="text-5xl mb-1">🎲</span>
