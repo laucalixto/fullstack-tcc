@@ -214,11 +214,12 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   // ─── Animation loop ─────────────────────────────────────────────────────────
 
   const clock = new THREE.Clock();
+  const MAX_DELTA = 0.1; // caps accumulated time when tab loses focus
   let animId: number;
 
   function animate() {
     animId = requestAnimationFrame(animate);
-    const delta = clock.getDelta();
+    const delta = Math.min(clock.getDelta(), MAX_DELTA);
     dicePhysics.update(delta);
     pawnManager.update(delta);
     cameraController.update(activePos);
@@ -226,6 +227,12 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   }
 
   animate();
+
+  // Consume accumulated clock delta when tab regains focus to prevent animation jump
+  function onVisibilityChange() {
+    if (!document.hidden) clock.getDelta();
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange);
 
   // ─── Resize ─────────────────────────────────────────────────────────────────
 
@@ -242,6 +249,7 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   return () => {
     cancelAnimationFrame(animId);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('resize', onResize);
     unsubPlayers();
     unsubActive();

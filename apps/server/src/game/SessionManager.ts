@@ -350,6 +350,26 @@ export class SessionManager {
     player.name = name;
   }
 
+  markDisconnected(sessionId: string, playerId: string): { nextPlayerId: string | null; turnAdvanced: boolean } {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) return { nextPlayerId: null, turnAdvanced: false };
+
+    const { session, turnManager } = entry;
+    if (session.state !== 'ACTIVE') return { nextPlayerId: null, turnAdvanced: false };
+
+    const player = session.players.find((p) => p.id === playerId);
+    if (player) player.isConnected = false;
+
+    const currentPlayer = session.players[session.currentPlayerIndex];
+    if (currentPlayer.id === playerId && turnManager) {
+      const nextPlayerId = turnManager.next();
+      session.currentPlayerIndex = session.players.findIndex((p) => p.id === nextPlayerId);
+      return { nextPlayerId, turnAdvanced: true };
+    }
+
+    return { nextPlayerId: null, turnAdvanced: false };
+  }
+
   markGameReady(sessionId: string, playerId: string): boolean {
     const entry = this.sessions.get(sessionId);
     if (!entry) throw new Error('SESSION_NOT_FOUND');

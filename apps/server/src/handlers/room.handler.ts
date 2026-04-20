@@ -37,6 +37,8 @@ export function registerRoomHandler(
 
       const { session, playerId } = sm.joinSession(payload.pin, payload.playerName);
       socket.join(session.id);
+      socket.data.sessionId = session.id;
+      socket.data.playerId = playerId;
 
       const joined: RoomJoinedPayload = { sessionId: session.id, playerId, pin: payload.pin };
       socket.emit(EVENTS.ROOM_JOINED, joined);

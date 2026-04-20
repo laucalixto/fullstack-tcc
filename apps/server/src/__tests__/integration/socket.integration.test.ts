@@ -261,6 +261,120 @@ describe('WebSocket sync — quiz:question direcionado', () => {
   }, 8000);
 });
 
+// ─── RED: desconexão avança o turno automaticamente ──────────────────────────
+// Se o jogador na vez se desconectar, o servidor deve emitir TURN_CHANGED para
+// o próximo jogador para que o jogo não trave.
+
+describe('WebSocket sync — disconnect avança turno', () => {
+  let httpServer: HttpServer;
+  let port: number;
+  let clients: ClientSocket[];
+
+  beforeEach(async () => {
+    clients = [];
+    httpServer = createServer();
+    attachSocketIO(httpServer, new SessionManager({ rollDiceFn: () => 4 }), { autoStartDelayMs: 50 });
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    port = (httpServer.address() as AddressInfo).port;
+  });
+
+  afterEach(async () => {
+    for (const c of clients) c.disconnect();
+    await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+  });
+
+  function connect(): Promise<ClientSocket> {
+    return new Promise((resolve) => {
+      const c = ioClient(`http://127.0.0.1:${port}`, { autoConnect: false });
+      clients.push(c);
+      c.once('connect', () => resolve(c));
+      c.connect();
+    });
+  }
+
+  it('quando o jogador ativo se desconecta, TURN_CHANGED é emitido para o próximo', async () => {
+    const fac = await connect();
+    const p1  = await connect();
+    const p2  = await connect();
+
+    const [session] = await Promise.all([
+      waitFor<GameSession>(fac, EVENTS.GAME_STATE),
+      Promise.resolve(fac.emit(EVENTS.ROOM_CREATE, { facilitatorId: 'fac-1', maxPlayers: 2 })),
+    ]);
+
+    const [, p1Joined] = await Promise.all([
+      waitFor<GameSession>(p1, EVENTS.GAME_STATE),
+      waitFor<{ playerId: string }>(p1, EVENTS.ROOM_JOINED),
+      Promise.resolve(p1.emit(EVENTS.ROOM_JOIN, { pin: session.pin, playerName: 'P1' })),
+    ]);
+
+    await Promise.all([
+      waitFor<GameSession>(p2, EVENTS.GAME_STATE),
+      waitFor<{ playerId: string }>(p2, EVENTS.ROOM_JOINED),
+      Promise.resolve(p2.emit(EVENTS.ROOM_JOIN, { pin: session.pin, playerName: 'P2' })),
+    ]);
+
+    // Inicia jogo — aguarda p1 E p2 receberem GAME_STATE+TURN_CHANGED
+    const [startedState] = await Promise.all([
+      waitFor<GameSession>(p1, EVENTS.GAME_STATE),
+      waitFor(p1, EVENTS.TURN_CHANGED),
+      waitFor(p2, EVENTS.GAME_STATE),
+      waitFor(p2, EVENTS.TURN_CHANGED),
+      Promise.resolve(fac.emit(EVENTS.GAME_START, { sessionId: session.id })),
+    ]);
+
+    // Confirma que p1 está na vez
+    expect(startedState.players[startedState.currentPlayerIndex].id).toBe(p1Joined.playerId);
+
+    // Só agora registra o listener de TURN_CHANGED no p2 para capturar o disconnect
+    const turnChangedPromise = waitFor<{ playerId: string }>(p2, EVENTS.TURN_CHANGED);
+    p1.disconnect();
+
+    const turn = await turnChangedPromise;
+    expect(turn.playerId).not.toBe(p1Joined.playerId);
+  }, 8000);
+
+  it('quando jogador fora da vez se desconecta, TURN_CHANGED NÃO é emitido', async () => {
+    const fac = await connect();
+    const p1  = await connect();
+    const p2  = await connect();
+
+    const [session] = await Promise.all([
+      waitFor<GameSession>(fac, EVENTS.GAME_STATE),
+      Promise.resolve(fac.emit(EVENTS.ROOM_CREATE, { facilitatorId: 'fac-1', maxPlayers: 2 })),
+    ]);
+
+    await Promise.all([
+      waitFor<GameSession>(p1, EVENTS.GAME_STATE),
+      waitFor(p1, EVENTS.ROOM_JOINED),
+      Promise.resolve(p1.emit(EVENTS.ROOM_JOIN, { pin: session.pin, playerName: 'P1' })),
+    ]);
+
+    const [, p2Joined] = await Promise.all([
+      waitFor<GameSession>(p2, EVENTS.GAME_STATE),
+      waitFor<{ playerId: string }>(p2, EVENTS.ROOM_JOINED),
+      Promise.resolve(p2.emit(EVENTS.ROOM_JOIN, { pin: session.pin, playerName: 'P2' })),
+    ]);
+
+    await Promise.all([
+      waitFor(p1, EVENTS.GAME_STATE),
+      waitFor(p1, EVENTS.TURN_CHANGED),
+      Promise.resolve(fac.emit(EVENTS.GAME_START, { sessionId: session.id })),
+    ]);
+
+    // p2 se desconecta (não está na vez — p1 está)
+    let p1ReceivedTurnChanged = false;
+    p1.on(EVENTS.TURN_CHANGED, () => { p1ReceivedTurnChanged = true; });
+    p2.disconnect();
+
+    await new Promise((r) => setTimeout(r, 200));
+    expect(p1ReceivedTurnChanged).toBe(false);
+
+    // Silencia referência ao playerId
+    void p2Joined;
+  }, 8000);
+});
+
 // ─── RED: eventos de uma sala NÃO devem vazar para outra sala ────────────────
 // Bug: socket.join() acumula rooms. Se um socket entra em sala1 e depois sala2,
 // fica em ambas — broadcasts de sala1 chegam ao socket que deveria estar só em sala2.
