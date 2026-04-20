@@ -7,8 +7,12 @@ import { RegisterSchema, LoginSchema } from './auth.schemas.js';
 export function createAuthRouter(store: FacilitatorStore): Router {
   const router = Router();
 
-  // POST /api/auth/register
+  // POST /api/auth/register — desabilitado em produção (use seed-facilitator)
   router.post('/register', async (req: Request, res: Response): Promise<void> => {
+    if (process.env.NODE_ENV === 'production') {
+      res.status(403).json({ error: 'Registro desabilitado em produção.' });
+      return;
+    }
     const parsed = RegisterSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });

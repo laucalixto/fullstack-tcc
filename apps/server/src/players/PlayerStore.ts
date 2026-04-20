@@ -88,13 +88,14 @@ export class PlayerStore {
   }
 
   async createAsync(data: Omit<PlayerRecord, 'playerId'>): Promise<PlayerRecord> {
+    const playerId = randomUUID();
     const email = data.email.toLowerCase();
 
     if (this.isConnected()) {
       try {
-        const doc = await PlayerModel.create({ ...data, email });
+        const doc = await PlayerModel.create({ ...data, playerId, email });
         const record: PlayerRecord = {
-          playerId: doc.id,
+          playerId: doc.playerId,
           firstName: doc.firstName,
           lastName: doc.lastName,
           email: doc.email,
@@ -110,7 +111,7 @@ export class PlayerStore {
       }
     }
 
-    return this.create(data);
+    return this.create({ ...data, email } as Omit<PlayerRecord, 'playerId'>);
   }
 
   async leaderboard(): Promise<LeaderboardEntry[]> {
@@ -146,16 +147,4 @@ export class PlayerStore {
     }));
   }
 
-  leaderboardSync(): LeaderboardEntry[] {
-    const sorted = [...this.byId.values()].sort(
-      (a, b) => b.totalScore - a.totalScore,
-    );
-    return sorted.map((p, i) => ({
-      rank: i + 1,
-      playerId: p.playerId,
-      name: `${p.firstName} ${p.lastName}`,
-      industrialUnit: p.industrialUnit,
-      totalScore: p.totalScore,
-    }));
-  }
 }

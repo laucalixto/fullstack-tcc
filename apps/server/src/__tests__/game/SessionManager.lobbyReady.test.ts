@@ -39,6 +39,17 @@ describe('SessionManager — markLobbyReady', () => {
     const stillFalse = (sm as any).markLobbyReady(id, p1); // p2 ainda não enviou
     expect(stillFalse).toBe(false);
   });
+
+  it('retorna true quando todos os jogadores presentes ficam prontos, mesmo com maxPlayers > players.length', () => {
+    const sm = new SessionManager();
+    const session = sm.createSession('fac-1', undefined, undefined, 4); // sala para 4
+    const { playerId: p1 } = sm.joinSession(session.pin, 'Alice');
+    const { playerId: p2 } = sm.joinSession(session.pin, 'Bob');
+    // apenas 2 de 4 slots preenchidos
+    sm.markLobbyReady(session.id, p1);
+    const allReady = sm.markLobbyReady(session.id, p2);
+    expect(allReady).toBe(true); // todos os presentes confirmaram
+  });
 });
 
 describe('SessionManager — markGameReady', () => {

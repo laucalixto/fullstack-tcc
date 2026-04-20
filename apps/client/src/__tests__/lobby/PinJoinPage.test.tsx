@@ -14,6 +14,9 @@ vi.mock('../../ws/socket', () => ({
       socketHandlers[ev] = socketHandlers[ev] ?? [];
       socketHandlers[ev].push(cb);
     }),
+    off: vi.fn((ev: string, cb: (...args: unknown[]) => void) => {
+      socketHandlers[ev] = (socketHandlers[ev] ?? []).filter((h) => h !== cb);
+    }),
   },
 }));
 
@@ -96,7 +99,7 @@ describe('PinJoinPage', () => {
   it('exibe mensagem de erro ao receber GAME_ALREADY_STARTED', () => {
     renderPage();
     act(() => { triggerSocket(EVENTS.ROOM_ERROR, { code: 'GAME_ALREADY_STARTED', message: '' }); });
-    expect(screen.getByText(/já iniciada/i)).toBeInTheDocument();
+    expect(screen.getByText(/em andamento/i)).toBeInTheDocument();
   });
 
   it('botão "Voltar ao início" navega para /', () => {

@@ -60,12 +60,22 @@ describe('SessionManager', () => {
     expect(() => sm.joinSession(pin, 'P5')).toThrow('ROOM_FULL');
   });
 
-  it('joinSession lança GAME_ALREADY_STARTED se jogo ativo', () => {
+  it('joinSession lança GAME_ALREADY_STARTED se jogo ativo (ACTIVE)', () => {
     const sm = new SessionManager();
     const { pin, id } = sm.createSession('fac-1');
     sm.joinSession(pin, 'P1');
     sm.startGame(id);
     expect(() => sm.joinSession(pin, 'Late')).toThrow('GAME_ALREADY_STARTED');
+  });
+
+  it('joinSession lança ROOM_NOT_FOUND se sessão já encerrada (FINISHED)', () => {
+    const sm = new SessionManager();
+    const { pin, id } = sm.createSession('fac-1', undefined, undefined, 2);
+    sm.joinSession(pin, 'P1');
+    sm.joinSession(pin, 'P2');
+    sm.startGame(id);
+    sm.finishGame(id);
+    expect(() => sm.joinSession(pin, 'Late')).toThrow('ROOM_NOT_FOUND');
   });
 
   it('startGame transiciona estado para ACTIVE', () => {

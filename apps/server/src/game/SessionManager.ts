@@ -128,7 +128,8 @@ export class SessionManager {
     const entry = this.sessions.get(id)!;
     const { session } = entry;
 
-    if (session.state !== 'WAITING') throw new Error('GAME_ALREADY_STARTED');
+    if (session.state === 'FINISHED') throw new Error('ROOM_NOT_FOUND');
+    if (session.state === 'ACTIVE') throw new Error('GAME_ALREADY_STARTED');
     if (session.players.length >= session.maxPlayers) throw new Error('ROOM_FULL');
 
     const playerId = randomUUID();
@@ -334,7 +335,7 @@ export class SessionManager {
     entry.lobbyReadyPlayers.add(playerId);
     // Keep session.lobbyReadyPlayers in sync (for GAME_STATE broadcasts)
     entry.session.lobbyReadyPlayers = [...entry.lobbyReadyPlayers];
-    return entry.lobbyReadyPlayers.size >= entry.session.maxPlayers;
+    return entry.lobbyReadyPlayers.size >= entry.session.players.length;
   }
 
   renamePlayer(sessionId: string, playerId: string, name: string): void {

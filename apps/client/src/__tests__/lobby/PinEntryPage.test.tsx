@@ -114,7 +114,7 @@ describe('PinEntryPage — tratamento de ROOM_ERROR', () => {
     expect(screen.getByTestId('pin-error')).toHaveTextContent('Sala cheia.');
   });
 
-  it('exibe "Sala não encontrada." quando ROOM_ERROR com code ROOM_NOT_FOUND é recebido', async () => {
+  it('exibe "PIN inválido ou sessão encerrada." quando ROOM_ERROR com code ROOM_NOT_FOUND é recebido', async () => {
     renderPinEntry();
 
     fireEvent.change(screen.getByTestId('pin-input'), { target: { value: '000000' } });
@@ -123,10 +123,10 @@ describe('PinEntryPage — tratamento de ROOM_ERROR', () => {
     const errorPayload: RoomErrorPayload = { code: 'ROOM_NOT_FOUND', message: 'Room not found' };
     act(() => { triggerOnce(EVENTS.ROOM_ERROR, errorPayload); });
 
-    expect(screen.getByTestId('pin-error')).toHaveTextContent('Sala não encontrada.');
+    expect(screen.getByTestId('pin-error')).toHaveTextContent('PIN inválido ou sessão encerrada.');
   });
 
-  it('exibe "Partida já iniciada." quando ROOM_ERROR com code GAME_ALREADY_STARTED', async () => {
+  it('exibe "Partida em andamento." quando ROOM_ERROR com code GAME_ALREADY_STARTED', async () => {
     renderPinEntry();
 
     fireEvent.change(screen.getByTestId('pin-input'), { target: { value: '111111' } });
@@ -135,7 +135,7 @@ describe('PinEntryPage — tratamento de ROOM_ERROR', () => {
     const errorPayload: RoomErrorPayload = { code: 'GAME_ALREADY_STARTED', message: 'Game started' };
     act(() => { triggerOnce(EVENTS.ROOM_ERROR, errorPayload); });
 
-    expect(screen.getByTestId('pin-error')).toHaveTextContent('Partida já iniciada.');
+    expect(screen.getByTestId('pin-error')).toHaveTextContent('Partida em andamento.');
   });
 
   it('não exibe erro antes de qualquer resposta do servidor', () => {

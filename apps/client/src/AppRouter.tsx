@@ -32,10 +32,10 @@ import { EVENTS } from '@safety-board/shared';
 // ─── Page containers ──────────────────────────────────────────────────────────
 
 const ROOM_ERROR_MESSAGES: Record<RoomErrorPayload['code'], string> = {
-  ROOM_FULL:           'Sala cheia.',
-  ROOM_NOT_FOUND:      'Sala não encontrada.',
-  GAME_ALREADY_STARTED: 'Partida já iniciada.',
-  NOT_YOUR_TURN:       'Não é o seu turno.',
+  ROOM_FULL:            'Sala cheia.',
+  ROOM_NOT_FOUND:       'PIN inválido ou sessão encerrada.',
+  GAME_ALREADY_STARTED: 'Partida em andamento.',
+  NOT_YOUR_TURN:        'Não é o seu turno.',
 };
 
 function PinEntryPage() {
@@ -51,17 +51,25 @@ function PinEntryPage() {
   const handleJoin = useCallback((pin: string) => {
     setRoomError(undefined);
     socket.emit(EVENTS.ROOM_JOIN, { pin, playerName: 'Jogador' });
-    // ROOM_JOINED traz o playerId real (UUID gerado pelo servidor)
-    socket.once(EVENTS.ROOM_JOINED, ({ playerId }: RoomJoinedPayload) => {
+
+    function onJoined({ playerId }: RoomJoinedPayload) {
       setMyPlayerId(playerId);
-    });
-    socket.once(EVENTS.GAME_STATE, (session) => {
+      socket.off(EVENTS.ROOM_ERROR, onError);
+    }
+    function onState(session: Parameters<typeof setSession>[0]) {
       setSession(session);
       navigate('/personagem');
-    });
-    socket.once(EVENTS.ROOM_ERROR, (payload: RoomErrorPayload) => {
+      socket.off(EVENTS.ROOM_ERROR, onError);
+    }
+    function onError(payload: RoomErrorPayload) {
       setRoomError(ROOM_ERROR_MESSAGES[payload.code] ?? 'Erro ao entrar na sala.');
-    });
+      socket.off(EVENTS.ROOM_JOINED, onJoined);
+      socket.off(EVENTS.GAME_STATE, onState);
+    }
+
+    socket.once(EVENTS.ROOM_JOINED, onJoined);
+    socket.once(EVENTS.GAME_STATE, onState);
+    socket.once(EVENTS.ROOM_ERROR, onError);
   }, [navigate, setMyPlayerId, setSession]);
 
   return (
@@ -353,6 +361,11 @@ function NewSessionFormPage() {
   const shareLink = useManagerStore((s) => s.shareLink);
   const isLoading = useManagerStore((s) => s.isLoading);
 
+  // Constrói URL completa usando a origem atual — funciona em localhost e produção
+  const fullShareLink = shareLink
+    ? `${window.location.origin}${shareLink}`
+    : undefined;
+
   const handleCreate = useCallback(async (config: NewSessionConfig) => {
     useManagerStore.getState().setLoading(true);
     try {
@@ -370,7 +383,7 @@ function NewSessionFormPage() {
     <NewSessionForm
       onCreateSession={handleCreate}
       generatedPin={generatedPin ?? undefined}
-      shareLink={shareLink ?? undefined}
+      shareLink={fullShareLink}
       isLoading={isLoading}
     />
   );

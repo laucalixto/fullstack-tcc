@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { connectDB, disconnectDB } from '../db/connection.js';
 import { QuestionModel } from '../db/models/Question.model.js';
 

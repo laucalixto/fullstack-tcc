@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { NewSessionConfig, SessionDifficulty } from '@safety-board/shared';
 
 interface NewSessionFormProps {
@@ -23,10 +23,30 @@ const TEST_ID: Record<SessionDifficulty, string> = {
 export function NewSessionForm({ onCreateSession, generatedPin, shareLink, isLoading = false }: NewSessionFormProps) {
   const [difficulty, setDifficulty] = useState<SessionDifficulty>('basic');
   const [maxPlayers, setMaxPlayers] = useState<2 | 3 | 4>(2);
+  const [copied, setCopied] = useState(false);
 
   function handleGenerate() {
     onCreateSession({ difficulty, maxPlayers });
   }
+
+  const handleCopy = useCallback(async () => {
+    if (!shareLink) return;
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback para ambientes sem Clipboard API (HTTP não-seguro)
+      const el = document.createElement('input');
+      el.value = shareLink;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [shareLink]);
 
   return (
     <div className="bg-surface text-on-surface antialiased">
@@ -187,10 +207,20 @@ export function NewSessionForm({ onCreateSession, generatedPin, shareLink, isLoa
                         >
                           {shareLink}
                         </div>
-                        <button className="bg-secondary text-on-secondary px-3 py-2 flex items-center justify-center hover:opacity-90 active:scale-95 transition-all">
-                          📋
+                        <button
+                          data-testid="session-copy-link"
+                          onClick={handleCopy}
+                          title="Copiar link"
+                          className="bg-secondary text-on-secondary px-3 py-2 flex items-center justify-center hover:opacity-90 active:scale-95 transition-all min-w-[42px]"
+                        >
+                          {copied ? '✓' : '📋'}
                         </button>
                       </div>
+                      {copied && (
+                        <p className="text-[10px] text-primary font-bold mt-1 uppercase tracking-widest">
+                          Link copiado!
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

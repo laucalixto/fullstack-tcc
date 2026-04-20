@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
-import { randomUUID } from 'node:crypto';
 import { createApp } from '../../app.js';
 import { PlayerStore } from '../../players/PlayerStore.js';
 
@@ -8,7 +7,7 @@ import { PlayerStore } from '../../players/PlayerStore.js';
 vi.mock('../../db/models/Player.model.js', () => ({
   PlayerModel: {
     findOne: vi.fn().mockResolvedValue(null),
-    create: vi.fn().mockImplementation((data) => Promise.resolve({ id: `id-${data.email}`, ...data })),
+    create: vi.fn().mockImplementation((data) => Promise.resolve({ ...data })),
     find: vi.fn().mockReturnValue({
       sort: vi.fn().mockReturnValue({
         limit: vi.fn().mockResolvedValue([]),
