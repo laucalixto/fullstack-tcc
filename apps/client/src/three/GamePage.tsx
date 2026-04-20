@@ -14,6 +14,8 @@ import type { TurnChangedPayload, TurnResultPayload } from '@safety-board/shared
 import { DICE_ZONE } from './dice/DicePhysics';
 import { BOARD_PATH } from '@safety-board/shared';
 
+export const QUIZ_OPEN_DELAY_MS = 2000;
+
 interface QuizQuestionPayload {
   sessionId: string;
   playerId: string;
@@ -35,8 +37,11 @@ export function GamePage() {
   const setGameResult = useGameStore((s) => s.setGameResult);
 
   const [quizPayload, setQuizPayload] = useState<QuizQuestionPayload | null>(null);
-  const [quizPending, setQuizPending] = useState<QuizQuestionPayload | null>(null);
   const [quizResult, setQuizResult] = useState<'correct' | 'incorrect' | undefined>();
+
+  // Quiz pendente e seu fallback controlados por refs — sem corrida com useEffect
+  const quizPendingRef       = useRef<QuizQuestionPayload | null>(null);
+  const quizFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isDiceRolling, setIsDiceRolling] = useState(false);
   const [isPawnSettling, setIsPawnSettling] = useState(false);
   const [victoryPending, setVictoryPending] = useState(false);
@@ -91,7 +96,16 @@ export function GamePage() {
     function onQuizQuestion(payload: QuizQuestionPayload) {
       if (payload.playerId !== useGameStore.getState().myPlayerId) return;
       setQuizResult(undefined);
-      setQuizPending(payload); // buffer — will open after pawn:done
+      quizPendingRef.current = payload;
+      // Fallback de 7s: abre o quiz se pawn:done nunca disparar (ex: peão não moveu)
+      if (quizFallbackTimerRef.current) clearTimeout(quizFallbackTimerRef.current);
+      quizFallbackTimerRef.current = setTimeout(() => {
+        if (quizPendingRef.current) {
+          setQuizPayload(quizPendingRef.current);
+          quizPendingRef.current = null;
+        }
+        quizFallbackTimerRef.current = null;
+      }, 7000);
     }
 
     function onQuizResult(payload: { correct: boolean }) {
@@ -126,13 +140,16 @@ export function GamePage() {
       // Dual-condition: pawn:done ocorreu — verifica se TURN_CHANGED já veio
       settlePawnDone.current = true;
       checkSettle();
-      // Delay de 1s para o jogador perceber onde o peão parou antes do modal abrir
-      setTimeout(() => {
-        setQuizPending((pending) => {
-          if (pending) setQuizPayload(pending);
-          return null;
-        });
-      }, 1000);
+      // Cancela o fallback e abre o quiz após o delay (peão já chegou na casa)
+      if (quizFallbackTimerRef.current) {
+        clearTimeout(quizFallbackTimerRef.current);
+        quizFallbackTimerRef.current = null;
+      }
+      const pending = quizPendingRef.current;
+      if (pending) {
+        quizPendingRef.current = null;
+        setTimeout(() => setQuizPayload(pending), QUIZ_OPEN_DELAY_MS);
+      }
       setVictoryPending((wasPending) => {
         if (wasPending) {
           const finishTile = BOARD_PATH[BOARD_PATH.length - 1];
@@ -153,6 +170,7 @@ export function GamePage() {
       unsubDiceDone();
       unsubRollStart();
       unsubPawnDone();
+      if (quizFallbackTimerRef.current) clearTimeout(quizFallbackTimerRef.current);
     };
   }, [navigate, setSession, setGameResult]);
 
@@ -182,16 +200,6 @@ export function GamePage() {
       selectedText: '',
     });
   }, [quizPayload]);
-
-  // Fallback: show quiz after 3s if pawn:done never fires (e.g., no movement)
-  useEffect(() => {
-    if (!quizPending) return;
-    const timer = setTimeout(() => {
-      setQuizPayload(quizPending);
-      setQuizPending(null);
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [quizPending]);
 
   // Fallback: caso pawn:done nunca dispare (ex: peão sem movimento), assume-o após 5s
   // Ainda respeita TURN_CHANGED — não libera enquanto quiz do adversário estiver ativo

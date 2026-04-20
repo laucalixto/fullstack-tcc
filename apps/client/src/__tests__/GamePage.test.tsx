@@ -50,7 +50,7 @@ function triggerSocket(event: string, payload: unknown) {
 import { useGameStore } from '../stores/gameStore';
 import { socket } from '../ws/socket';
 import { EVENTS } from '@safety-board/shared';
-import { GamePage } from '../three/GamePage';
+import { GamePage, QUIZ_OPEN_DELAY_MS } from '../three/GamePage';
 import { gameBus } from '../three/EventBus';
 
 // ─── Dados de teste ───────────────────────────────────────────────────────────
@@ -185,7 +185,7 @@ describe('GamePage', () => {
       });
     });
     act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
-    act(() => { vi.advanceTimersByTime(1000); });
+    act(() => { vi.advanceTimersByTime(QUIZ_OPEN_DELAY_MS); });
     expect(screen.getByTestId('challenge-modal')).toBeInTheDocument();
     vi.useRealTimers();
   });
@@ -203,7 +203,7 @@ describe('GamePage', () => {
       });
     });
     act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
-    act(() => { vi.advanceTimersByTime(1000); });
+    act(() => { vi.advanceTimersByTime(QUIZ_OPEN_DELAY_MS); });
     fireEvent.click(screen.getByTestId('challenge-option-0'));
     expect(socket.emit).toHaveBeenCalledWith(EVENTS.QUIZ_ANSWER, expect.objectContaining({
       sessionId: 'session-1',
@@ -362,7 +362,7 @@ describe('GamePage', () => {
       });
     });
     act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
-    act(() => { vi.advanceTimersByTime(1000); });
+    act(() => { vi.advanceTimersByTime(QUIZ_OPEN_DELAY_MS); });
     expect(screen.getByTestId('challenge-modal')).toBeInTheDocument();
     expect(screen.getByTestId('btn-roll-dice')).toBeDisabled();
     vi.useRealTimers();
@@ -408,7 +408,7 @@ describe('GamePage', () => {
     act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
     expect(screen.queryByTestId('challenge-modal')).not.toBeInTheDocument();
     // Abre após o delay
-    act(() => { vi.advanceTimersByTime(1000); });
+    act(() => { vi.advanceTimersByTime(QUIZ_OPEN_DELAY_MS); });
     expect(screen.getByTestId('challenge-modal')).toBeInTheDocument();
     vi.useRealTimers();
   });
