@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import mongoose from 'mongoose';
 import type { FacilitatorId } from '@safety-board/shared';
 import { FacilitatorModel } from '../db/models/Facilitator.model.js';
 
@@ -15,17 +16,23 @@ export interface FacilitatorRecord {
 export class FacilitatorStore {
   private readonly memCache = new Map<string, FacilitatorRecord>();
 
+  private isConnected(): boolean {
+    return mongoose.connection.readyState === 1;
+  }
+
   findByEmail(email: string): FacilitatorRecord | null {
     return this.memCache.get(email.toLowerCase()) ?? null;
   }
 
   async findByEmailAsync(email: string): Promise<FacilitatorRecord | null> {
-    const cached = this.memCache.get(email.toLowerCase());
+    const key = email.toLowerCase();
+    const cached = this.memCache.get(key);
     if (cached) return cached;
     
-    // Fallback para MongoDB se não estiver no cache (útil após restart do server)
+    if (!this.isConnected()) return null;
+
     try {
-      const doc = await FacilitatorModel.findOne({ email: email.toLowerCase() });
+      const doc = await FacilitatorModel.findOne({ email: key });
       if (!doc) return null;
       const record: FacilitatorRecord = { 
         id: doc.id as FacilitatorId, 
@@ -33,11 +40,9 @@ export class FacilitatorStore {
         name: doc.name, 
         passwordHash: doc.passwordHash 
       };
-      this.memCache.set(email.toLowerCase(), record);
+      this.memCache.set(key, record);
       return record;
     } catch (err) {
-      // Em caso de erro no DB (ex: não conectado em testes unitários), 
-      // apenas retorna null ou o que estiver no cache
       return null;
     }
   }
@@ -53,18 +58,26 @@ export class FacilitatorStore {
   }
 
   async createAsync(data: Omit<FacilitatorRecord, 'id'>): Promise<FacilitatorRecord> {
-    const doc = await FacilitatorModel.create({ 
-      ...data, 
-      email: data.email.toLowerCase() 
-    });
-    const record: FacilitatorRecord = { 
-      id: doc.id as FacilitatorId, 
-      email: doc.email, 
-      name: doc.name, 
-      passwordHash: doc.passwordHash 
-      };
-    this.memCache.set(record.email, record);
-    return record;
+    const email = data.email.toLowerCase();
+
+    if (this.isConnected()) {
+      try {
+        const doc = await FacilitatorModel.create({ ...data, email });
+        const record: FacilitatorRecord = { 
+          id: doc.id as FacilitatorId, 
+          email: doc.email, 
+          name: doc.name, 
+          passwordHash: doc.passwordHash 
+        };
+        this.memCache.set(email, record);
+        return record;
+      } catch (err) {
+        console.error('[db] Facilitator creation failed:', err);
+      }
+    }
+
+    // Fallback para memória se banco offline
+    return this.create(data);
   }
 
   existsByEmail(email: string): boolean {
@@ -73,7 +86,13 @@ export class FacilitatorStore {
 
   async existsByEmailAsync(email: string): Promise<boolean> {
     if (this.existsByEmail(email)) return true;
-    const doc = await FacilitatorModel.findOne({ email: email.toLowerCase() });
-    return !!doc;
+    if (!this.isConnected()) return false;
+
+    try {
+      const doc = await FacilitatorModel.findOne({ email: email.toLowerCase() });
+      return !!doc;
+    } catch {
+      return false;
+    }
   }
 }

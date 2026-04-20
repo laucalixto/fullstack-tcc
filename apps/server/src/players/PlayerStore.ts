@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import mongoose from 'mongoose';
 import { PlayerModel } from '../db/models/Player.model.js';
 
 export interface PlayerRecord {
@@ -23,14 +24,24 @@ export class PlayerStore {
   private readonly byEmail = new Map<string, PlayerRecord>();
   private readonly byId = new Map<string, PlayerRecord>();
 
+  private isConnected(): boolean {
+    return mongoose.connection.readyState === 1;
+  }
+
   existsByEmail(email: string): boolean {
     return this.byEmail.has(email.toLowerCase());
   }
 
   async existsByEmailAsync(email: string): Promise<boolean> {
     if (this.existsByEmail(email)) return true;
-    const doc = await PlayerModel.findOne({ email: email.toLowerCase() });
-    return !!doc;
+    if (!this.isConnected()) return false;
+
+    try {
+      const doc = await PlayerModel.findOne({ email: email.toLowerCase() });
+      return !!doc;
+    } catch {
+      return false;
+    }
   }
 
   findByEmail(email: string): PlayerRecord | null {
@@ -38,24 +49,31 @@ export class PlayerStore {
   }
 
   async findByEmailAsync(email: string): Promise<PlayerRecord | null> {
-    const cached = this.findByEmail(email);
+    const key = email.toLowerCase();
+    const cached = this.findByEmail(key);
     if (cached) return cached;
     
-    const doc = await PlayerModel.findOne({ email: email.toLowerCase() });
-    if (!doc) return null;
-    
-    const record: PlayerRecord = {
-      playerId: doc.id,
-      firstName: doc.firstName,
-      lastName: doc.lastName,
-      email: doc.email,
-      industrialUnit: doc.industrialUnit,
-      passwordHash: doc.passwordHash,
-      totalScore: doc.totalScore,
-    };
-    this.byEmail.set(record.email, record);
-    this.byId.set(record.playerId, record);
-    return record;
+    if (!this.isConnected()) return null;
+
+    try {
+      const doc = await PlayerModel.findOne({ email: key });
+      if (!doc) return null;
+      
+      const record: PlayerRecord = {
+        playerId: doc.id,
+        firstName: doc.firstName,
+        lastName: doc.lastName,
+        email: doc.email,
+        industrialUnit: doc.industrialUnit,
+        passwordHash: doc.passwordHash,
+        totalScore: doc.totalScore,
+      };
+      this.byEmail.set(record.email, record);
+      this.byId.set(record.playerId, record);
+      return record;
+    } catch {
+      return null;
+    }
   }
 
   create(data: Omit<PlayerRecord, 'playerId'>): PlayerRecord {
@@ -70,46 +88,50 @@ export class PlayerStore {
   }
 
   async createAsync(data: Omit<PlayerRecord, 'playerId'>): Promise<PlayerRecord> {
-    const doc = await PlayerModel.create({
-      ...data,
-      email: data.email.toLowerCase(),
-    });
-    const record: PlayerRecord = {
-      playerId: doc.id,
-      firstName: doc.firstName,
-      lastName: doc.lastName,
-      email: doc.email,
-      industrialUnit: doc.industrialUnit,
-      passwordHash: doc.passwordHash,
-      totalScore: doc.totalScore,
-    };
-    this.byEmail.set(record.email, record);
-    this.byId.set(record.playerId, record);
-    return record;
+    const email = data.email.toLowerCase();
+
+    if (this.isConnected()) {
+      try {
+        const doc = await PlayerModel.create({ ...data, email });
+        const record: PlayerRecord = {
+          playerId: doc.id,
+          firstName: doc.firstName,
+          lastName: doc.lastName,
+          email: doc.email,
+          industrialUnit: doc.industrialUnit,
+          passwordHash: doc.passwordHash,
+          totalScore: doc.totalScore,
+        };
+        this.byEmail.set(record.email, record);
+        this.byId.set(record.playerId, record);
+        return record;
+      } catch (err) {
+        console.error('[db] Player creation failed:', err);
+      }
+    }
+
+    return this.create(data);
   }
 
-  /**
-   * Retorna os top 100 jogadores ordenados por pontuação.
-   * Em produção, busca diretamente no MongoDB. Em testes, pode usar o cache.
-   */
   async leaderboard(): Promise<LeaderboardEntry[]> {
-    // Tenta buscar do MongoDB primeiro
-    try {
-      const docs = await PlayerModel.find()
-        .sort({ totalScore: -1 })
-        .limit(100);
-      
-      if (docs.length > 0) {
-        return docs.map((doc, i) => ({
-          rank: i + 1,
-          playerId: doc.id,
-          name: `${doc.firstName} ${doc.lastName}`,
-          industrialUnit: doc.industrialUnit,
-          totalScore: doc.totalScore,
-        }));
+    if (this.isConnected()) {
+      try {
+        const docs = await PlayerModel.find()
+          .sort({ totalScore: -1 })
+          .limit(100);
+        
+        if (docs.length > 0) {
+          return docs.map((doc, i) => ({
+            rank: i + 1,
+            playerId: doc.id,
+            name: `${doc.firstName} ${doc.lastName}`,
+            industrialUnit: doc.industrialUnit,
+            totalScore: doc.totalScore,
+          }));
+        }
+      } catch {
+        // Fallback para cache se erro na query
       }
-    } catch (err) {
-      // Fallback para cache em memória (útil para testes unitários simples)
     }
 
     const sorted = [...this.byId.values()].sort(
@@ -124,7 +146,6 @@ export class PlayerStore {
     }));
   }
 
-  // Apenas para compatibilidade com código legado durante a transição
   leaderboardSync(): LeaderboardEntry[] {
     const sorted = [...this.byId.values()].sort(
       (a, b) => b.totalScore - a.totalScore,
