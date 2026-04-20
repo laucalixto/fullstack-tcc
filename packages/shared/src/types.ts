@@ -81,6 +81,7 @@ export interface GameSession {
   quizConfig: QuizConfig;
   maxPlayers: 2 | 3 | 4;
   lobbyReadyPlayers?: string[];
+  finishCandidateId?: string;
 }
 
 // ─── Registro de jogador pós-partida ─────────────────────────────────────────

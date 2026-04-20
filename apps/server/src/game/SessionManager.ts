@@ -32,6 +32,8 @@ interface SessionEntry {
   totalAnswersByPlayer: Map<string, number>;
   lobbyReadyPlayers: Set<string>;
   gameReadyPlayers: Set<string>;
+  finishCandidateId: string | null;
+  finishRoundLastPlayerIndex: number | null;
 }
 
 interface SessionManagerConfig {
@@ -95,6 +97,8 @@ export class SessionManager {
       totalAnswersByPlayer: new Map(),
       lobbyReadyPlayers: new Set(),
       gameReadyPlayers: new Set(),
+      finishCandidateId: null,
+      finishRoundLastPlayerIndex: null,
     });
     this.pinToId.set(pin, id);
     return session;
@@ -151,12 +155,13 @@ export class SessionManager {
   rollDice(
     sessionId: string,
     playerId: string,
-  ): { dice: number; newPosition: number; nextPlayerId: string; quiz?: ServedQuestion } {
+  ): { dice: number; newPosition: number; nextPlayerId: string; quiz?: ServedQuestion; gameOver?: boolean } {
     const entry = this.sessions.get(sessionId);
     if (!entry) throw new Error('SESSION_NOT_FOUND');
 
     const { session, turnManager } = entry;
-    const currentPlayer = session.players[session.currentPlayerIndex];
+    const rollerIndex = session.currentPlayerIndex;
+    const currentPlayer = session.players[rollerIndex];
 
     if (!turnManager || currentPlayer.id !== playerId) {
       throw new Error('NOT_YOUR_TURN');
@@ -168,6 +173,25 @@ export class SessionManager {
 
     const nextPlayerId = turnManager.next();
     session.currentPlayerIndex = session.players.findIndex((p) => p.id === nextPlayerId);
+
+    // ── Última rodada ────────────────────────────────────────────────────────
+    // Se já havia um candidato e este é o último jogador da rodada → encerra
+    const isLastInRound = rollerIndex === session.players.length - 1;
+    if (entry.finishCandidateId !== null && isLastInRound) {
+      return { dice, newPosition: player.position, nextPlayerId, gameOver: true };
+    }
+
+    // Se este jogador chegou ao tile final
+    if (player.position >= 39) {
+      if (isLastInRound) {
+        // Ele mesmo é o último da rodada → encerra imediatamente
+        return { dice, newPosition: player.position, nextPlayerId, gameOver: true };
+      }
+      // Outros jogadores ainda precisam jogar → registra candidato e continua
+      entry.finishCandidateId = playerId;
+      entry.finishRoundLastPlayerIndex = session.players.length - 1;
+      session.finishCandidateId = playerId;
+    }
 
     // ── Quiz trigger ─────────────────────────────────────────────────────────
     if (isQuizTile(player.position)) {

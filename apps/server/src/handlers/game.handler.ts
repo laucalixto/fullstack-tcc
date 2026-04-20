@@ -36,8 +36,8 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
       const session = sm.getById(payload.sessionId);
       if (session) io.to(payload.sessionId).emit(EVENTS.GAME_STATE, session);
 
-      // Jogador chegou ao tile final — encerra a partida
-      if (result.newPosition >= 39) {
+      // Todos da rodada jogaram e alguém chegou ao final — encerra a partida
+      if (result.gameOver) {
         try {
           const gameResult = sm.finishGame(payload.sessionId);
           const finished: GameFinishedPayload = gameResult;
