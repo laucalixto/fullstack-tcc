@@ -53,6 +53,7 @@ export interface Player {
   name: string;
   position: number; // índice 0-39 no BOARD_PATH
   score: number;
+  skipNextTurn?: boolean;
   isConnected: boolean;
 }
 

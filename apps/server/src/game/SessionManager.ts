@@ -4,8 +4,8 @@ import { TurnManager } from '../engine/TurnManager.js';
 import { DiceService } from '../engine/DiceService.js';
 import { PINGenerator } from '../session/PINGenerator.js';
 import { QuizService, type ServedQuestion, type QuizCheckResult } from './QuizService.js';
-import { EVENTS, isQuizTile, getNormForTile } from '@safety-board/shared';
-import type { GameSession, Player, QuizConfig, GameResultPayload, GameResultPlayer } from '@safety-board/shared';
+import { EVENTS, isQuizTile, getNormForTile, isTileEffect, TILE_EFFECTS } from '@safety-board/shared';
+import type { GameSession, Player, QuizConfig, GameResultPayload, GameResultPlayer, TileEffectDefinition } from '@safety-board/shared';
 
 const DEFAULT_MAX_PLAYERS = 4;
 
@@ -17,8 +17,14 @@ const DEFAULT_QUIZ_CONFIG: QuizConfig = {
 interface PendingQuiz {
   playerId: string;
   questionId: string;
-  nextPlayerId: string; // guardado para emitir TURN_CHANGED após resposta
-  servedAt: number;     // Date.now() ao servir — base para cálculo de score
+  nextPlayerId: string;
+  servedAt: number;
+}
+
+interface PendingTileEffect {
+  playerId: string;
+  effect: TileEffectDefinition;
+  nextPlayerId: string;
 }
 
 interface SessionEntry {
@@ -34,6 +40,7 @@ interface SessionEntry {
   gameReadyPlayers: Set<string>;
   finishCandidateId: string | null;
   finishRoundLastPlayerIndex: number | null;
+  pendingTileEffect: PendingTileEffect | null;
 }
 
 interface SessionManagerConfig {
@@ -99,6 +106,7 @@ export class SessionManager {
       gameReadyPlayers: new Set(),
       finishCandidateId: null,
       finishRoundLastPlayerIndex: null,
+      pendingTileEffect: null,
     });
     this.pinToId.set(pin, id);
     return session;
@@ -155,7 +163,7 @@ export class SessionManager {
   rollDice(
     sessionId: string,
     playerId: string,
-  ): { dice: number; newPosition: number; nextPlayerId: string; quiz?: ServedQuestion; gameOver?: boolean } {
+  ): { dice: number; newPosition: number; nextPlayerId: string; quiz?: ServedQuestion; tileEffect?: TileEffectDefinition; gameOver?: boolean } {
     const entry = this.sessions.get(sessionId);
     if (!entry) throw new Error('SESSION_NOT_FOUND');
 
@@ -171,26 +179,35 @@ export class SessionManager {
     const player = session.players.find((p) => p.id === playerId)!;
     player.position = Math.min(player.position + dice, 39);
 
-    const nextPlayerId = turnManager.next();
+    // ── Avanço de turno com skip ─────────────────────────────────────────────
+    let nextPlayerId = turnManager.next();
+    let nextPlayer = session.players.find((p) => p.id === nextPlayerId)!;
+    if (nextPlayer.skipNextTurn) {
+      nextPlayer.skipNextTurn = false;
+      nextPlayerId = turnManager.next();
+    }
     session.currentPlayerIndex = session.players.findIndex((p) => p.id === nextPlayerId);
 
     // ── Última rodada ────────────────────────────────────────────────────────
-    // Se já havia um candidato e este é o último jogador da rodada → encerra
     const isLastInRound = rollerIndex === session.players.length - 1;
     if (entry.finishCandidateId !== null && isLastInRound) {
       return { dice, newPosition: player.position, nextPlayerId, gameOver: true };
     }
 
-    // Se este jogador chegou ao tile final
     if (player.position >= 39) {
       if (isLastInRound) {
-        // Ele mesmo é o último da rodada → encerra imediatamente
         return { dice, newPosition: player.position, nextPlayerId, gameOver: true };
       }
-      // Outros jogadores ainda precisam jogar → registra candidato e continua
       entry.finishCandidateId = playerId;
       entry.finishRoundLastPlayerIndex = session.players.length - 1;
       session.finishCandidateId = playerId;
+    }
+
+    // ── Tile effect trigger ──────────────────────────────────────────────────
+    if (isTileEffect(player.position)) {
+      const effect = TILE_EFFECTS[player.position];
+      entry.pendingTileEffect = { playerId, effect, nextPlayerId };
+      return { dice, newPosition: player.position, nextPlayerId, tileEffect: effect };
     }
 
     // ── Quiz trigger ─────────────────────────────────────────────────────────
@@ -209,6 +226,33 @@ export class SessionManager {
     }
 
     return { dice, newPosition: player.position, nextPlayerId };
+  }
+
+  applyTileEffect(sessionId: string, playerId: string): { nextPlayerId: string } {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) throw new Error('SESSION_NOT_FOUND');
+
+    const { pendingTileEffect, session } = entry;
+    if (!pendingTileEffect) throw new Error('NO_PENDING_TILE_EFFECT');
+    if (pendingTileEffect.playerId !== playerId) throw new Error('NOT_YOUR_TURN');
+
+    const player = session.players.find((p) => p.id === playerId)!;
+    const { effect, nextPlayerId } = pendingTileEffect;
+    entry.pendingTileEffect = null;
+
+    if (effect.backToStart) {
+      player.position = 0;
+    } else {
+      player.position = Math.max(0, Math.min(39, player.position + effect.deltaPosition));
+    }
+
+    player.score += effect.deltaScore;
+
+    if (effect.skipTurns > 0) {
+      player.skipNextTurn = true;
+    }
+
+    return { nextPlayerId };
   }
 
   submitAnswer(

@@ -69,8 +69,10 @@ export class PawnManager {
     if (fromIndex === toIndex) return;
 
     const steps: PawnStep[] = [];
-    for (let i = fromIndex; i < toIndex; i++) {
-      steps.push({ from: i, to: i + 1 });
+    if (toIndex > fromIndex) {
+      for (let i = fromIndex; i < toIndex; i++) steps.push({ from: i, to: i + 1 });
+    } else {
+      for (let i = fromIndex; i > toIndex; i--) steps.push({ from: i, to: i - 1 });
     }
     this.animations.set(playerId, { steps, stepIdx: 0, t: 0, onDone });
   }

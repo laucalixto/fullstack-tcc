@@ -426,4 +426,103 @@ describe('GamePage', () => {
     });
     expect(screen.queryByTestId('challenge-modal')).not.toBeInTheDocument();
   });
+
+  // ─── TILE_EFFECT (Fase J) ───────────────────────────────────────────────────
+
+  const makeTileEffect = () => ({
+    type: 'accident' as const,
+    title: 'Objeto em queda!',
+    description: 'Trabalhador sem capacete.',
+    normRef: 'NR-06',
+    imagePath: '/cards/accidents/sem-capacete.svg',
+    deltaPosition: -3,
+    deltaScore: -20,
+    skipTurns: 0,
+    backToStart: false,
+  });
+
+  it('TILE_EFFECT não abre EffectCard imediatamente — aguarda pawn:done', () => {
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.TILE_EFFECT, {
+        sessionId: 'session-1',
+        playerId: 'p1',
+        card: makeTileEffect(),
+      });
+    });
+    expect(screen.queryByTestId('effect-card')).not.toBeInTheDocument();
+  });
+
+  it('pawn:done abre EffectCard após EFFECT_OPEN_DELAY_MS', () => {
+    vi.useFakeTimers();
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.TILE_EFFECT, {
+        sessionId: 'session-1',
+        playerId: 'p1',
+        card: makeTileEffect(),
+      });
+    });
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(screen.getByTestId('effect-card')).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it('botão dado desabilitado enquanto EffectCard está aberto', () => {
+    vi.useFakeTimers();
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1', isMyTurn: true });
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.TILE_EFFECT, {
+        sessionId: 'session-1',
+        playerId: 'p1',
+        card: makeTileEffect(),
+      });
+    });
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(screen.getByTestId('btn-roll-dice')).toBeDisabled();
+    vi.useRealTimers();
+  });
+
+  it('fechar EffectCard emite TILE_EFFECT_ACK com sessionId e playerId', () => {
+    vi.useFakeTimers();
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1', isMyTurn: true });
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.TILE_EFFECT, {
+        sessionId: 'session-1',
+        playerId: 'p1',
+        card: makeTileEffect(),
+      });
+    });
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p1' }); });
+    act(() => { vi.advanceTimersByTime(2000); });
+    fireEvent.click(screen.getByRole('button', { name: /continuar/i }));
+    expect(socket.emit).toHaveBeenCalledWith(EVENTS.TILE_EFFECT_ACK, {
+      sessionId: 'session-1',
+      playerId: 'p1',
+    });
+    vi.useRealTimers();
+  });
+
+  it('TILE_EFFECT de outro jogador NÃO exibe EffectCard (filtrado por playerId)', () => {
+    vi.useFakeTimers();
+    useGameStore.setState({ session: makeSession('p1'), myPlayerId: 'p1' });
+    renderGamePage();
+    act(() => {
+      triggerSocket(EVENTS.TILE_EFFECT, {
+        sessionId: 'session-1',
+        playerId: 'p2', // outro jogador — deve ser ignorado
+        card: makeTileEffect(),
+      });
+    });
+    act(() => { gameBus.emit('pawn:done', { playerId: 'p2' }); });
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(screen.queryByTestId('effect-card')).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
 });

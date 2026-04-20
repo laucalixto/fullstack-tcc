@@ -33,6 +33,10 @@ export const EVENTS = {
   QUIZ_QUESTION: 'quiz:question',
   QUIZ_ANSWER: 'quiz:answer',
   QUIZ_RESULT: 'quiz:result',
+
+  // ─── Casas especiais ──────────────────────────────────────────────────────
+  TILE_EFFECT: 'tile:effect',
+  TILE_EFFECT_ACK: 'tile:effect:ack',
 } as const;
 
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS];
@@ -135,4 +139,15 @@ export interface PlayerRenamePayload {
   sessionId: string;
   playerId: string;
   name: string; // nome completo: firstName + " " + lastName
+}
+
+export interface TileEffectPayload {
+  sessionId: string;
+  playerId: string;
+  card: import('./board').TileEffectDefinition;
+}
+
+export interface TileEffectAckPayload {
+  sessionId: string;
+  playerId: string;
 }

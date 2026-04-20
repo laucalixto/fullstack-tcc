@@ -228,6 +228,47 @@ describe('PawnManager — animação casa a casa', () => {
   it('animatePawn para playerId desconhecido não lança erro', () => {
     expect(() => manager.animatePawn('ghost', 0, 5)).not.toThrow();
   });
+
+  // ─── RED: retorno (fromIndex > toIndex) ──────────────────────────────────────
+  it('animatePawn backward: inicia animação quando fromIndex > toIndex', () => {
+    manager.addPawn('p1', 0);
+    manager.animatePawn('p1', 6, 3); // volta 3 casas
+    expect(manager.isAnimating('p1')).toBe(true);
+  });
+
+  it('animatePawn backward: completa todos os passos e para', () => {
+    manager.addPawn('p1', 0);
+    manager.animatePawn('p1', 6, 3); // 3 passos: 6→5, 5→4, 4→3
+
+    manager.update(STEP_DURATION + 0.01);
+    manager.update(STEP_DURATION + 0.01);
+    manager.update(STEP_DURATION + 0.01);
+
+    expect(manager.isAnimating('p1')).toBe(false);
+  });
+
+  it('animatePawn backward: chama onDone ao concluir', () => {
+    const onDone = vi.fn();
+    manager.addPawn('p1', 0);
+    manager.animatePawn('p1', 6, 3, onDone);
+
+    manager.update(STEP_DURATION + 0.01);
+    manager.update(STEP_DURATION + 0.01);
+    manager.update(STEP_DURATION + 0.01);
+
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('animatePawn backward: chama position.set a cada frame durante animação', () => {
+    manager.addPawn('p1', 0);
+    manager.movePawn('p1', 6);
+    manager.animatePawn('p1', 6, 4);
+    const mesh = getMeshAt(0);
+    mesh.position.set.mockClear();
+
+    manager.update(STEP_DURATION * 0.5);
+    expect(mesh.position.set).toHaveBeenCalled();
+  });
 });
 
 // ─── RED: callback onDone ao concluir animação ────────────────────────────────

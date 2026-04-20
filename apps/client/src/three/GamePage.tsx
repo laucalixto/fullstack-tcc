@@ -7,14 +7,16 @@ import { ThreeCanvas } from './ThreeCanvas';
 import { PlayerList } from '../hud/PlayerList';
 import { InactivityTimer } from '../hud/InactivityTimer';
 import { ChallengeModal } from '../lobby/ChallengeModal';
+import { EffectCard } from '../lobby/EffectCard';
 import { useGameStore } from '../stores/gameStore';
 import { socket } from '../ws/socket';
 import { gameBus } from './EventBus';
-import type { TurnChangedPayload, TurnResultPayload } from '@safety-board/shared';
+import type { TurnChangedPayload, TurnResultPayload, TileEffectDefinition } from '@safety-board/shared';
 import { DICE_ZONE } from './dice/DicePhysics';
 import { BOARD_PATH } from '@safety-board/shared';
 
 export const QUIZ_OPEN_DELAY_MS = 2000;
+export const EFFECT_OPEN_DELAY_MS = 2000;
 
 interface QuizQuestionPayload {
   sessionId: string;
@@ -38,10 +40,15 @@ export function GamePage() {
 
   const [quizPayload, setQuizPayload] = useState<QuizQuestionPayload | null>(null);
   const [quizResult, setQuizResult] = useState<'correct' | 'incorrect' | undefined>();
+  const [effectCardPayload, setEffectCardPayload] = useState<TileEffectDefinition | null>(null);
 
   // Quiz pendente e seu fallback controlados por refs — sem corrida com useEffect
   const quizPendingRef       = useRef<QuizQuestionPayload | null>(null);
   const quizFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // EffectCard pendente — mesmo padrão do quiz
+  const effectPendingRef       = useRef<{ card: TileEffectDefinition; playerId: string } | null>(null);
+  const effectFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isDiceRolling, setIsDiceRolling] = useState(false);
   const [isPawnSettling, setIsPawnSettling] = useState(false);
   const [victoryPending, setVictoryPending] = useState(false);
@@ -108,6 +115,20 @@ export function GamePage() {
       }, 7000);
     }
 
+    function onTileEffect(payload: { sessionId: string; playerId: string; card: TileEffectDefinition }) {
+      if (payload.playerId !== useGameStore.getState().myPlayerId) return;
+      effectPendingRef.current = { card: payload.card, playerId: payload.playerId };
+      // Fallback de 7s: abre o card se pawn:done nunca disparar
+      if (effectFallbackTimerRef.current) clearTimeout(effectFallbackTimerRef.current);
+      effectFallbackTimerRef.current = setTimeout(() => {
+        if (effectPendingRef.current) {
+          setEffectCardPayload(effectPendingRef.current.card);
+          effectPendingRef.current = null;
+        }
+        effectFallbackTimerRef.current = null;
+      }, 7000);
+    }
+
     function onQuizResult(payload: { correct: boolean }) {
       setQuizResult(payload.correct ? 'correct' : 'incorrect');
       setTimeout(() => setQuizPayload(null), 2000);
@@ -124,6 +145,7 @@ export function GamePage() {
     socket.on(EVENTS.QUIZ_QUESTION, onQuizQuestion);
     socket.on(EVENTS.QUIZ_RESULT,   onQuizResult);
     socket.on(EVENTS.GAME_FINISHED, onGameFinished);
+    socket.on(EVENTS.TILE_EFFECT,   onTileEffect);
 
     const unsubDiceDone = gameBus.on<{ face: number }>('dice:done', () => {
       setIsDiceRolling(false);
@@ -140,15 +162,25 @@ export function GamePage() {
       // Dual-condition: pawn:done ocorreu — verifica se TURN_CHANGED já veio
       settlePawnDone.current = true;
       checkSettle();
-      // Cancela o fallback e abre o quiz após o delay (peão já chegou na casa)
+      // Quiz: cancela fallback e abre após delay
       if (quizFallbackTimerRef.current) {
         clearTimeout(quizFallbackTimerRef.current);
         quizFallbackTimerRef.current = null;
       }
-      const pending = quizPendingRef.current;
-      if (pending) {
+      const pendingQuiz = quizPendingRef.current;
+      if (pendingQuiz) {
         quizPendingRef.current = null;
-        setTimeout(() => setQuizPayload(pending), QUIZ_OPEN_DELAY_MS);
+        setTimeout(() => setQuizPayload(pendingQuiz), QUIZ_OPEN_DELAY_MS);
+      }
+      // EffectCard: cancela fallback e abre após delay
+      if (effectFallbackTimerRef.current) {
+        clearTimeout(effectFallbackTimerRef.current);
+        effectFallbackTimerRef.current = null;
+      }
+      const pendingEffect = effectPendingRef.current;
+      if (pendingEffect) {
+        effectPendingRef.current = null;
+        setTimeout(() => setEffectCardPayload(pendingEffect.card), EFFECT_OPEN_DELAY_MS);
       }
       setVictoryPending((wasPending) => {
         if (wasPending) {
@@ -171,15 +203,25 @@ export function GamePage() {
       unsubRollStart();
       unsubPawnDone();
       if (quizFallbackTimerRef.current) clearTimeout(quizFallbackTimerRef.current);
+      if (effectFallbackTimerRef.current) clearTimeout(effectFallbackTimerRef.current);
+      socket.off(EVENTS.TILE_EFFECT, onTileEffect);
     };
   }, [navigate, setSession, setGameResult]);
 
+  const handleEffectCardClose = useCallback(() => {
+    if (!effectCardPayload) return;
+    setEffectCardPayload(null);
+    if (session && myPlayerId) {
+      socket.emit(EVENTS.TILE_EFFECT_ACK, { sessionId: session.id, playerId: myPlayerId });
+    }
+  }, [effectCardPayload, session, myPlayerId]);
+
   const handleRollDice = useCallback(() => {
-    if (!session || !myPlayerId || isDiceRolling || isPawnSettling || quizPayload) return;
+    if (!session || !myPlayerId || isDiceRolling || isPawnSettling || quizPayload || effectCardPayload) return;
     setIsDiceRolling(true);
     socket.emit(EVENTS.TURN_ROLL, { sessionId: session.id, playerId: myPlayerId });
     gameBus.emit('dice:throw', { position: DICE_ZONE });
-  }, [session, myPlayerId, isDiceRolling, isPawnSettling, quizPayload]);
+  }, [session, myPlayerId, isDiceRolling, isPawnSettling, quizPayload, effectCardPayload]);
 
   const handleAnswer = useCallback((selectedText: string) => {
     if (!quizPayload) return;
@@ -261,7 +303,7 @@ export function GamePage() {
         {isMyTurn && (
           <InactivityTimer
             seconds={15}
-            active={isMyTurn && !quizPayload}
+            active={isMyTurn && !quizPayload && !effectCardPayload && !isPawnSettling}
             onTimeout={handleInactivityTimeout}
           />
         )}
@@ -278,7 +320,7 @@ export function GamePage() {
             <button
               data-testid="btn-roll-dice"
               onClick={handleRollDice}
-              disabled={isDiceRolling || isPawnSettling || !!quizPayload}
+              disabled={isDiceRolling || isPawnSettling || !!quizPayload || !!effectCardPayload}
               className="relative h-32 w-32 rounded-full bg-primary shadow-2xl flex flex-col items-center justify-center text-white border-4 border-white/30 active:scale-95 hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
             >
               <span className="text-5xl mb-1">🎲</span>
@@ -288,6 +330,15 @@ export function GamePage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Effect Card — casa especial */}
+      {effectCardPayload && (
+        <EffectCard
+          open={true}
+          card={effectCardPayload}
+          onClose={handleEffectCardClose}
+        />
       )}
 
       {/* Modal de quiz — z-index mais alto, bloqueia tudo */}

@@ -96,3 +96,46 @@ export function getNormForTile(tileIndex: number, activeNormIds: string[]): stri
   const group = Math.min(Math.floor(tileIndex / 10), activeNormIds.length - 1);
   return activeNormIds[group];
 }
+
+// ─── Casas especiais (Effect Cards) ──────────────────────────────────────────
+
+export type TileEffectType = 'accident' | 'prevention' | 'back-to-start' | 'skip-turn';
+
+export interface TileEffectDefinition {
+  type: TileEffectType;
+  title: string;
+  description: string;
+  normRef: string;
+  imagePath: string;
+  deltaPosition: number;  // negativo = volta casas; positivo = avança
+  deltaScore: number;     // negativo = perde pontos
+  skipTurns: number;      // 1 = perde próxima rodada
+  backToStart: boolean;
+}
+
+export const TILE_EFFECTS: Record<number, TileEffectDefinition> = {
+  2:  { type: 'prevention',   title: 'EPI em Dia!',             description: 'Todos os EPIs utilizados corretamente antes de iniciar a atividade.',        normRef: 'NR-06 Art. 6º',      imagePath: '/cards/prevention/epi-correto.svg',            deltaPosition:  3, deltaScore:  25, skipTurns: 0, backToStart: false },
+  3:  { type: 'accident',     title: 'Objeto em queda!',        description: 'Trabalhador atingido por objeto sem usar capacete.',                          normRef: 'NR-06 Art. 6º',      imagePath: '/cards/accidents/sem-capacete.svg',            deltaPosition: -3, deltaScore: -20, skipTurns: 0, backToStart: false },
+  6:  { type: 'prevention',   title: 'DDS Realizado!',          description: 'Diálogo Diário de Segurança realizado com toda a equipe.',                    normRef: 'NR-01 item 1.7',     imagePath: '/cards/prevention/dds-realizado.svg',          deltaPosition:  2, deltaScore:  20, skipTurns: 0, backToStart: false },
+  7:  { type: 'accident',     title: 'Queda em Altura!',        description: 'Trabalho em altura realizado sem cinto de segurança.',                        normRef: 'NR-35 item 35.4',    imagePath: '/cards/accidents/sem-cinto-altura.svg',        deltaPosition: -4, deltaScore: -25, skipTurns: 0, backToStart: false },
+  10: { type: 'back-to-start',title: 'Acidente Grave!',         description: 'Falta de cultura de segurança resultou em acidente com afastamento.',        normRef: 'NR-01',              imagePath: '/cards/special/acidente-grave.svg',            deltaPosition:  0, deltaScore: -50, skipTurns: 0, backToStart: true  },
+  11: { type: 'accident',     title: 'Choque Elétrico!',        description: 'Equipamento energizado sem bloqueio/etiquetagem.',                            normRef: 'NR-10 item 10.7',    imagePath: '/cards/accidents/acidente-eletrico.svg',       deltaPosition: -5, deltaScore: -30, skipTurns: 0, backToStart: false },
+  12: { type: 'prevention',   title: 'Risco Reportado!',        description: 'Condição insegura identificada e comunicada ao supervisor.',                  normRef: 'NR-01 item 1.7.4',   imagePath: '/cards/prevention/condicao-reportada.svg',     deltaPosition:  3, deltaScore:  25, skipTurns: 0, backToStart: false },
+  13: { type: 'skip-turn',    title: 'Afastamento Médico',      description: 'Acidente de trabalho resulta em afastamento.',                                normRef: 'NR-07',              imagePath: '/cards/special/afastamento.svg',               deltaPosition:  0, deltaScore:   0, skipTurns: 1, backToStart: false },
+  16: { type: 'accident',     title: 'Exposição Química!',      description: 'Manuseio de substância química sem EPI adequado.',                            normRef: 'NR-06 Anexo I',      imagePath: '/cards/accidents/exposicao-quimica.svg',       deltaPosition: -3, deltaScore: -20, skipTurns: 0, backToStart: false },
+  17: { type: 'prevention',   title: 'Simulacro Concluído!',    description: 'Simulacro de emergência e evacuação realizado com sucesso.',                  normRef: 'NR-23 item 23.4',    imagePath: '/cards/prevention/simulacro-emergencia.svg',   deltaPosition:  2, deltaScore:  20, skipTurns: 0, backToStart: false },
+  21: { type: 'accident',     title: 'Acidente com Máquina!',   description: 'Máquina operada sem protetor na parte móvel.',                                normRef: 'NR-12 item 12.38',   imagePath: '/cards/accidents/acidente-maquina.svg',        deltaPosition: -4, deltaScore: -25, skipTurns: 0, backToStart: false },
+  22: { type: 'prevention',   title: 'Primeiros Socorros!',     description: 'Treinamento de primeiros socorros concluído pela equipe.',                    normRef: 'NR-07 item 7.3',     imagePath: '/cards/prevention/primeiros-socorros.svg',     deltaPosition:  3, deltaScore:  25, skipTurns: 0, backToStart: false },
+  23: { type: 'skip-turn',    title: 'Autuação do MTE!',        description: 'Ministério do Trabalho autua a empresa por descumprimento de NR.',            normRef: 'NR-01',              imagePath: '/cards/special/autuacao-fiscal.svg',           deltaPosition:  0, deltaScore:   0, skipTurns: 1, backToStart: false },
+  26: { type: 'prevention',   title: 'Checklist Aprovado!',     description: 'Checklist de segurança de máquinas preenchido antes da operação.',            normRef: 'NR-12 item 12.130',  imagePath: '/cards/prevention/checklist-maquina.svg',      deltaPosition:  2, deltaScore:  20, skipTurns: 0, backToStart: false },
+  27: { type: 'accident',     title: 'LER — Lesão por Esforço!',description: 'Atividade repetitiva sem adequação ergonômica.',                              normRef: 'NR-17 item 17.3',    imagePath: '/cards/accidents/ler-ergonomia.svg',           deltaPosition: -2, deltaScore: -15, skipTurns: 0, backToStart: false },
+  31: { type: 'accident',     title: 'Escorregão Perigoso!',    description: 'Piso molhado sem sinalização de segurança.',                                  normRef: 'NR-26 item 26.3',    imagePath: '/cards/accidents/queda-piso.svg',              deltaPosition: -2, deltaScore: -15, skipTurns: 0, backToStart: false },
+  32: { type: 'prevention',   title: 'Área Sinalizada!',        description: 'Sinalização de área de risco instalada e visível.',                           normRef: 'NR-26 item 26.1',    imagePath: '/cards/prevention/sinalizacao-risco.svg',      deltaPosition:  2, deltaScore:  20, skipTurns: 0, backToStart: false },
+  33: { type: 'skip-turn',    title: 'Máquina Interditada!',    description: 'Máquina interditada pelo fiscal até adequação às normas.',                    normRef: 'NR-12',              imagePath: '/cards/special/interdicao.svg',                deltaPosition:  0, deltaScore:   0, skipTurns: 1, backToStart: false },
+  36: { type: 'accident',     title: 'Incêndio no Local!',      description: 'Ausência de extintores e rota de fuga sinalizada.',                           normRef: 'NR-23 item 23.3',    imagePath: '/cards/accidents/incendio.svg',                deltaPosition: -3, deltaScore: -20, skipTurns: 0, backToStart: false },
+  37: { type: 'prevention',   title: 'LOTO Aplicado!',          description: 'Procedimento de bloqueio e etiquetagem seguido corretamente.',                normRef: 'NR-10 item 10.7',    imagePath: '/cards/prevention/bloqueio-etiquetagem.svg',   deltaPosition:  3, deltaScore:  25, skipTurns: 0, backToStart: false },
+};
+
+export function isTileEffect(index: number): boolean {
+  return index in TILE_EFFECTS;
+}

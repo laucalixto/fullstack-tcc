@@ -4,6 +4,7 @@ import {
   type RoomErrorPayload,
   type QuizAnswerPayload,
   type GameFinishedPayload,
+  type TileEffectAckPayload,
 } from '@safety-board/shared';
 import { SessionManager } from '../game/SessionManager.js';
 
@@ -48,7 +49,14 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
         return;
       }
 
-      if (result.quiz) {
+      if (result.tileEffect) {
+        // Casa especial — emite SOMENTE ao jogador da vez (não broadcast), igual ao quiz
+        socket.emit(EVENTS.TILE_EFFECT, {
+          sessionId: payload.sessionId,
+          playerId: payload.playerId,
+          card: result.tileEffect,
+        });
+      } else if (result.quiz) {
         // Casa de quiz — emite pergunta SOMENTE ao jogador da vez (não broadcast)
         socket.emit(EVENTS.QUIZ_QUESTION, {
           sessionId: payload.sessionId,
@@ -59,6 +67,20 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
       } else {
         io.to(payload.sessionId).emit(EVENTS.TURN_CHANGED, { playerId: result.nextPlayerId });
       }
+    } catch (e) {
+      const msg = (e as Error).message;
+      const code: RoomErrorPayload['code'] =
+        msg === 'NOT_YOUR_TURN' ? 'NOT_YOUR_TURN' : 'ROOM_NOT_FOUND';
+      socket.emit(EVENTS.ROOM_ERROR, { code, message: msg } satisfies RoomErrorPayload);
+    }
+  });
+
+  socket.on(EVENTS.TILE_EFFECT_ACK, (payload: TileEffectAckPayload) => {
+    try {
+      const { nextPlayerId } = sm.applyTileEffect(payload.sessionId, payload.playerId);
+      const session = sm.getById(payload.sessionId);
+      if (session) io.to(payload.sessionId).emit(EVENTS.GAME_STATE, session);
+      io.to(payload.sessionId).emit(EVENTS.TURN_CHANGED, { playerId: nextPlayerId });
     } catch (e) {
       const msg = (e as Error).message;
       const code: RoomErrorPayload['code'] =
