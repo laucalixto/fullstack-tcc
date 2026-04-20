@@ -9,7 +9,6 @@ interface LobbyWaitingProps {
   onStart: () => void;
   isFacilitator: boolean;
   sessionName?: string;
-  shareLink?: string;
   maxPlayers?: number;
   autoStartAt?: number; // timestamp do servidor: Date.now() + delayMs
 }
@@ -20,7 +19,6 @@ export function LobbyWaiting({
   onStart,
   isFacilitator,
   sessionName,
-  shareLink,
   maxPlayers = DEFAULT_MAX_PLAYERS,
   autoStartAt,
 }: LobbyWaitingProps) {
@@ -89,26 +87,15 @@ export function LobbyWaiting({
               </span>
             </div>
 
-            {/* PIN + shareLink */}
-            <div className="flex flex-wrap items-center gap-4 mb-8">
-              <div className="flex items-center gap-3 bg-surface-container-lowest/70 rounded-xl px-4 py-3 border border-outline-variant/10">
-                <span className="text-[10px] font-black uppercase tracking-widest text-outline">PIN</span>
-                <span
-                  data-testid="lobby-pin"
-                  className="text-xl font-black tracking-[0.3em] text-primary"
-                >
-                  {pin}
-                </span>
-              </div>
-              {shareLink && (
-                <a
-                  data-testid="lobby-share-link"
-                  href={shareLink}
-                  className="flex items-center gap-2 bg-surface-container-lowest/70 rounded-xl px-4 py-3 border border-outline-variant/10 text-secondary text-xs font-bold uppercase tracking-widest hover:border-secondary/40 transition-colors"
-                >
-                  🔗 Link direto
-                </a>
-              )}
+            {/* PIN */}
+            <div className="flex items-center gap-3 bg-surface-container-lowest/70 rounded-xl px-4 py-3 border border-outline-variant/10 mb-8 self-start">
+              <span className="text-[10px] font-black uppercase tracking-widest text-outline">PIN</span>
+              <span
+                data-testid="lobby-pin"
+                className="text-xl font-black tracking-[0.3em] text-primary"
+              >
+                {pin}
+              </span>
             </div>
 
             {/* Players grid */}

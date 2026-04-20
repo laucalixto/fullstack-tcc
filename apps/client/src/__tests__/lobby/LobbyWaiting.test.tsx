@@ -84,8 +84,6 @@ describe('LobbyWaiting', () => {
     expect(screen.getByTestId('player-count')).toHaveTextContent('3 / 4');
   });
 
-  // ─── RED: falha até sessionName e shareLink serem implementados ───────────────
-
   it('exibe o nome da sessão quando fornecido', () => {
     render(
       <LobbyWaiting
@@ -97,19 +95,6 @@ describe('LobbyWaiting', () => {
       />,
     );
     expect(screen.getByTestId('lobby-session-name')).toHaveTextContent('Treinamento NR-35');
-  });
-
-  it('exibe o shareLink quando fornecido', () => {
-    render(
-      <LobbyWaiting
-        pin="123456"
-        players={makePlayers(1)}
-        onStart={vi.fn()}
-        isFacilitator={false}
-        shareLink="/sala/123456"
-      />,
-    );
-    expect(screen.getByTestId('lobby-share-link')).toBeInTheDocument();
   });
 
   // ─── maxPlayers + autoStartAt ────────────────────────────────────────────────

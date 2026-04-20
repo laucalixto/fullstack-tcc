@@ -91,7 +91,6 @@ function LobbyWaitingPage() {
 
   const pin         = session?.pin ?? '------';
   const sessionName = session?.name;
-  const shareLink   = session?.shareLink;
   const maxPlayers  = session?.maxPlayers;
   // Mostra apenas quem chegou ao lobby (lobbyReadyPlayers); fallback = todos (compatibilidade)
   const lobbyReady  = session?.lobbyReadyPlayers;
@@ -128,7 +127,6 @@ function LobbyWaitingPage() {
       players={players}
       pin={pin}
       sessionName={sessionName}
-      shareLink={shareLink}
       maxPlayers={maxPlayers}
       autoStartAt={autoStartAt}
       onStart={() => {}}
