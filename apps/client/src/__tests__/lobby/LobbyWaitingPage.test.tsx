@@ -107,11 +107,11 @@ describe('LobbyWaitingPage', () => {
     expect(screen.getByTestId('autostart-countdown')).toBeInTheDocument();
   });
 
-  it('NÃO navega imediatamente se sessão já está ACTIVE ao montar', () => {
+  it('navega imediatamente para /tutorial se sessão já está ACTIVE ao montar', () => {
     useGameStore.setState({ session: makeSession('ACTIVE'), myPlayerId: 'p1' });
     act(() => { renderLobby(); });
-    // Comportamento correto: aguarda no lobby até receber GAME_STATE via socket
-    expect(mockNavigate).not.toHaveBeenCalledWith('/tutorial');
+    // Jogador chegou ao lobby com sessão já iniciada (ex: perdeu GAME_STATE durante CharacterSelect)
+    expect(mockNavigate).toHaveBeenCalledWith('/tutorial');
   });
 
   it('navega para /tutorial quando GAME_STATE(ACTIVE) chega via socket', () => {

@@ -260,3 +260,94 @@ describe('WebSocket sync — quiz:question direcionado', () => {
     expect(p2ReceivedQuiz).toBe(false);
   }, 8000);
 });
+
+// ─── RED: eventos de uma sala NÃO devem vazar para outra sala ────────────────
+// Bug: socket.join() acumula rooms. Se um socket entra em sala1 e depois sala2,
+// fica em ambas — broadcasts de sala1 chegam ao socket que deveria estar só em sala2.
+
+describe('WebSocket sync — isolamento entre salas', () => {
+  let httpServer: HttpServer;
+  let port: number;
+  let clients: ClientSocket[];
+
+  beforeEach(async () => {
+    clients = [];
+    httpServer = createServer();
+    attachSocketIO(httpServer, new SessionManager({ rollDiceFn: () => 4 }));
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    port = (httpServer.address() as AddressInfo).port;
+  });
+
+  afterEach(async () => {
+    for (const c of clients) c.disconnect();
+    await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+  });
+
+  function connect(): Promise<ClientSocket> {
+    return new Promise((resolve) => {
+      const c = ioClient(`http://127.0.0.1:${port}`, { autoConnect: false });
+      clients.push(c);
+      c.once('connect', () => resolve(c));
+      c.connect();
+    });
+  }
+
+  it('GAME_STATE de sala1 não chega a socket que entrou em sala2 depois', async () => {
+    const fac = await connect();
+    const mobilePlayer = await connect(); // mesmo socket: entra em sala1, depois sala2
+    const sala2Player  = await connect();
+
+    // Criar sala1
+    const [session1] = await Promise.all([
+      new Promise<GameSession>((res) => fac.once(EVENTS.GAME_STATE, res)),
+      Promise.resolve(fac.emit(EVENTS.ROOM_CREATE, { facilitatorId: 'fac-1', maxPlayers: 2 })),
+    ]);
+
+    // Criar sala2
+    const [session2] = await Promise.all([
+      new Promise<GameSession>((res) => fac.once(EVENTS.GAME_STATE, res)),
+      Promise.resolve(fac.emit(EVENTS.ROOM_CREATE, { facilitatorId: 'fac-1', maxPlayers: 2 })),
+    ]);
+
+    // mobilePlayer entra em sala1 primeiro
+    await Promise.all([
+      new Promise((res) => mobilePlayer.once(EVENTS.GAME_STATE, res)),
+      new Promise((res) => mobilePlayer.once(EVENTS.ROOM_JOINED, res)),
+      Promise.resolve(mobilePlayer.emit(EVENTS.ROOM_JOIN, { pin: session1.pin, playerName: 'Mobile' })),
+    ]);
+
+    // mobilePlayer entra em sala2 (deveria sair de sala1 automaticamente)
+    await Promise.all([
+      new Promise((res) => mobilePlayer.once(EVENTS.GAME_STATE, res)),
+      new Promise((res) => mobilePlayer.once(EVENTS.ROOM_JOINED, res)),
+      Promise.resolve(mobilePlayer.emit(EVENTS.ROOM_JOIN, { pin: session2.pin, playerName: 'Mobile' })),
+    ]);
+
+    // sala2Player também entra em sala2
+    await Promise.all([
+      new Promise((res) => sala2Player.once(EVENTS.GAME_STATE, res)),
+      new Promise((res) => sala2Player.once(EVENTS.ROOM_JOINED, res)),
+      Promise.resolve(sala2Player.emit(EVENTS.ROOM_JOIN, { pin: session2.pin, playerName: 'Sala2Player' })),
+    ]);
+
+    // sala2Player dispara um evento que vai para sala2
+    // mobilePlayer NÃO deve receber GAME_STATE de sala1 sendo "player" de sala2
+    let mobileReceivedSala1State = false;
+    mobilePlayer.on(EVENTS.GAME_STATE, (s: GameSession) => {
+      if (s.id === session1.id) mobileReceivedSala1State = true;
+    });
+
+    // Força broadcast de sala1 adicionando alguém a ela (3º jogador tentando)
+    const ghost = await connect();
+    clients.push(ghost);
+    await Promise.all([
+      new Promise((res) => ghost.once(EVENTS.ROOM_JOINED, res)),
+      new Promise((res) => ghost.once(EVENTS.GAME_STATE, res)),
+      Promise.resolve(ghost.emit(EVENTS.ROOM_JOIN, { pin: session1.pin, playerName: 'Ghost' })),
+    ]);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mobileReceivedSala1State).toBe(false);
+  }, 10000);
+});

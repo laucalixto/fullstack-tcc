@@ -87,15 +87,27 @@ function PinEntryPage() {
 }
 
 function CharacterSelectPage() {
-  const navigate       = useNavigate();
-  const session        = useGameStore((s) => s.session);
-  const myPlayerId     = useGameStore((s) => s.myPlayerId);
+  const navigate         = useNavigate();
+  const session          = useGameStore((s) => s.session);
+  const myPlayerId       = useGameStore((s) => s.myPlayerId);
+  const setSession       = useGameStore((s) => s.setSession);
   const setPendingPlayer = useGameStore((s) => s.setPendingPlayer);
+
+  // Mantém sessão sincronizada enquanto o jogador escolhe personagem.
+  // Sem isso, updates de lobbyReadyPlayers e GAME_STATE chegam sem listener
+  // e o jogador chega ao lobby com dados stale.
+  useSocket(useCallback((updatedSession) => {
+    if (updatedSession.id !== session?.id) return;
+    setSession(updatedSession);
+    // Se o jogo já iniciou enquanto estava nessa tela, pula direto ao tutorial
+    if (updatedSession.state === 'ACTIVE') {
+      navigate('/tutorial');
+    }
+  }, [session?.id, setSession, navigate]));
 
   const handleConfirm = useCallback((firstName: string, lastName: string, avatarId: string) => {
     const fullName = `${firstName} ${lastName}`;
     setPendingPlayer(fullName, avatarId);
-    // Atualiza o nome no servidor para todos os jogadores da sessão
     if (session?.id && myPlayerId) {
       socket.emit(EVENTS.PLAYER_RENAME, { sessionId: session.id, playerId: myPlayerId, name: fullName });
     }
@@ -128,29 +140,39 @@ function LobbyWaitingPage() {
     ? (session?.players ?? []).filter((p) => lobbyReady.includes(p.id))
     : (session?.players ?? []);
 
+  // Se o jogo já iniciou (edge case: GAME_STATE ACTIVE chegou durante CharacterSelect
+  // e navegação para /lobby aconteceu antes do redirect — pula direto ao tutorial)
+  useEffect(() => {
+    if (session?.state === 'ACTIVE') navigate('/tutorial');
+  }, [session?.state, navigate]);
+
   // Sinaliza ao servidor que chegou ao lobby
   useEffect(() => {
     if (!session?.id || !myPlayerId) return;
+    if (session.state !== 'WAITING') return; // não emitir se jogo já iniciou
     socket.emit(EVENTS.LOBBY_READY, { sessionId: session.id, playerId: myPlayerId });
-  }, [session?.id, myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session?.id, session?.state, myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recebe confirmação do servidor de que todos estão no lobby → exibe countdown
   useEffect(() => {
+    const sessionId = session?.id;
     function onGameStarting(payload: GameStartingPayload) {
+      if (payload.sessionId !== sessionId) return;
       setAutoStartAt(payload.autoStartAt);
     }
     socket.on(EVENTS.GAME_STARTING, onGameStarting);
     return () => { socket.off(EVENTS.GAME_STARTING, onGameStarting); };
-  }, []);
+  }, [session?.id]);
 
   // Mantém a store sincronizada com todos os GAME_STATE recebidos no lobby
   // (P1 entra antes dos demais — sem isso, não veria os peões de P2–P4 no tabuleiro)
   useSocket(useCallback((updatedSession) => {
+    if (updatedSession.id !== session?.id) return;
     setSession(updatedSession);
     if (updatedSession.state === 'ACTIVE') {
       navigate('/tutorial');
     }
-  }, [navigate, setSession]));
+  }, [navigate, session?.id, setSession]));
 
   return (
     <>
@@ -193,10 +215,14 @@ function GameLoadingPage() {
 
   // Navega ao tabuleiro quando todos estão prontos
   useEffect(() => {
-    function onGameBegin() { navigate('/jogo'); }
+    const sessionId = session?.id;
+    function onGameBegin(payload: { sessionId: string }) {
+      if (payload.sessionId !== sessionId) return;
+      navigate('/jogo');
+    }
     socket.on(EVENTS.GAME_BEGIN, onGameBegin);
     return () => { socket.off(EVENTS.GAME_BEGIN, onGameBegin); };
-  }, [navigate]);
+  }, [navigate, session?.id]);
 
   return <GameLoading />;
 }

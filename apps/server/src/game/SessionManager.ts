@@ -335,7 +335,11 @@ export class SessionManager {
     entry.lobbyReadyPlayers.add(playerId);
     // Keep session.lobbyReadyPlayers in sync (for GAME_STATE broadcasts)
     entry.session.lobbyReadyPlayers = [...entry.lobbyReadyPlayers];
-    return entry.lobbyReadyPlayers.size >= entry.session.players.length;
+    const MIN_PLAYERS = 2;
+    return (
+      entry.session.players.length >= MIN_PLAYERS &&
+      entry.lobbyReadyPlayers.size >= entry.session.players.length
+    );
   }
 
   renamePlayer(sessionId: string, playerId: string, name: string): void {

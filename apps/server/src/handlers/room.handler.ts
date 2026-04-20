@@ -30,6 +30,11 @@ export function registerRoomHandler(
 
   socket.on(EVENTS.ROOM_JOIN, (payload: RoomJoinPayload) => {
     try {
+      // Garante que o socket só esteja em uma sala por vez — previne vazamento de eventos
+      for (const room of socket.rooms) {
+        if (room !== socket.id) socket.leave(room);
+      }
+
       const { session, playerId } = sm.joinSession(payload.pin, payload.playerName);
       socket.join(session.id);
 

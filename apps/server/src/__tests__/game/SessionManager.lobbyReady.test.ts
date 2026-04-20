@@ -50,6 +50,14 @@ describe('SessionManager — markLobbyReady', () => {
     const allReady = sm.markLobbyReady(session.id, p2);
     expect(allReady).toBe(true); // todos os presentes confirmaram
   });
+
+  it('nunca retorna true com apenas 1 jogador — partida exige mínimo 2', () => {
+    const sm = new SessionManager();
+    const session = sm.createSession('fac-1', undefined, undefined, 4);
+    const { playerId: p1 } = sm.joinSession(session.pin, 'Solo');
+    const allReady = sm.markLobbyReady(session.id, p1);
+    expect(allReady).toBe(false);
+  });
 });
 
 describe('SessionManager — markGameReady', () => {
