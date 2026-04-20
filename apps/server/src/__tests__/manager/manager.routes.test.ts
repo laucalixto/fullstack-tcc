@@ -1,8 +1,24 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../app.js';
 import { FacilitatorStore } from '../../auth/FacilitatorStore.js';
 import { PlayerStore } from '../../players/PlayerStore.js';
+
+// Mock dos modelos para evitar timeout de conexão no MongoDB
+vi.mock('../../db/models/Facilitator.model.js', () => ({
+  FacilitatorModel: {
+    findOne: vi.fn().mockResolvedValue(null),
+    create: vi.fn().mockImplementation((data) => Promise.resolve({ id: 'mock-fac-id', ...data })),
+  },
+}));
+
+vi.mock('../../db/models/Player.model.js', () => ({
+  PlayerModel: {
+    findOne: vi.fn().mockResolvedValue(null),
+    create: vi.fn().mockImplementation((data) => Promise.resolve({ id: `id-${data.email}`, ...data })),
+    countDocuments: vi.fn().mockResolvedValue(0),
+  },
+}));
 
 // ─── RED: falha até manager.router.ts ser implementado ───────────────────────
 

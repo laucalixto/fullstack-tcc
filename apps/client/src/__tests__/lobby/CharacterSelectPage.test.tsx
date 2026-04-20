@@ -112,10 +112,12 @@ describe('CharacterSelectPage — PLAYER_RENAME', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/lobby');
   });
 
-  it('não emite PLAYER_RENAME sem sessão ativa', () => {
+  it('redireciona para home (/) sem sessão ativa devido ao GameGuard', () => {
     useGameStore.setState({ session: null, myPlayerId: null });
     renderCharacterSelect();
-    fillAndConfirm('Alice', 'Silva');
-    expect(socket.emit).not.toHaveBeenCalledWith(EVENTS.PLAYER_RENAME, expect.anything());
+    
+    // Como o GameGuard redireciona quando não há sessão, 
+    // ele não deve estar na página de personagem
+    expect(screen.queryByTestId('first-name-input')).not.toBeInTheDocument();
   });
 });

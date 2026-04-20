@@ -9,12 +9,20 @@ import { createPlayerRouter } from './players/player.router.js';
 import { SessionManager } from './game/SessionManager.js';
 import { createManagerRouter } from './manager/manager.router.js';
 
+const isTest = process.env.NODE_ENV === 'test' || !!process.env.VITEST;
+
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 20,
+  max: isTest ? 1000 : 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1h
+  max: isTest ? 1000 : Number(process.env.REGISTER_LIMIT_MAX ?? 10),
+  message: { error: 'Limite de cadastros atingido. Tente mais tarde.' },
 });
 
 interface AppOptions {
@@ -38,10 +46,11 @@ export function createApp(options: AppOptions = {}): Express {
   app.use('/api/auth', authLimiter, createAuthRouter(facilitatorStore));
 
   const playerStore = options.playerStore ?? new PlayerStore();
+  app.use('/api/players/register', registerLimiter);
   app.use('/api/players', createPlayerRouter(playerStore));
 
-  app.get('/api/leaderboard', (_req, res) => {
-    res.json(playerStore.leaderboard());
+  app.get('/api/leaderboard', async (_req, res) => {
+    res.json(await playerStore.leaderboard());
   });
 
   const sessionManager = options.sessionManager ?? new SessionManager();

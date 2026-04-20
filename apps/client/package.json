@@ -15,6 +15,7 @@
   "dependencies": {
     "@safety-board/shared": "workspace:*",
     "cannon-es": "^0.20.0",
+    "howler": "^2.2.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.14.1",
@@ -26,6 +27,7 @@
     "@testing-library/jest-dom": "^6.4.0",
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.5.0",
+    "@types/howler": "^2.2.12",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@types/three": "^0.183.1",

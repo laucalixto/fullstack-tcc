@@ -1,8 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../app.js';
 
-// ─── RED: falha até auth.routes.ts ser implementado ──────────────────────────
+// Mock do modelo para evitar timeout de conexão no MongoDB
+vi.mock('../../db/models/Facilitator.model.js', () => ({
+  FacilitatorModel: {
+    findOne: vi.fn().mockResolvedValue(null),
+    create: vi.fn().mockImplementation((data) => Promise.resolve({ id: 'mock-id', ...data })),
+  },
+}));
+
+// ─── RED: falha até auth.routes.test.ts ser implementado ──────────────────────────
 
 describe('POST /api/auth/register', () => {
   const app = createApp();

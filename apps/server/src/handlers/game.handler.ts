@@ -7,6 +7,17 @@ import {
   type TileEffectAckPayload,
 } from '@safety-board/shared';
 import { SessionManager } from '../game/SessionManager.js';
+import { GameResultModel } from '../db/models/GameResult.model.js';
+
+const lastRollAt = new Map<string, number>();
+
+function throttleRoll(socketId: string): boolean {
+  const now = Date.now();
+  const last = lastRollAt.get(socketId) ?? 0;
+  if (now - last < 2000) return false;
+  lastRollAt.set(socketId, now);
+  return true;
+}
 
 export function registerGameHandler(socket: Socket, io: Server, sm: SessionManager): void {
   socket.on(EVENTS.GAME_START, (payload: { sessionId: string }) => {
@@ -26,6 +37,14 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
 
   socket.on(EVENTS.TURN_ROLL, (payload: { sessionId: string; playerId: string }) => {
     try {
+      if (!throttleRoll(socket.id)) {
+        socket.emit(EVENTS.ROOM_ERROR, {
+          code: 'NOT_YOUR_TURN',
+          message: 'Aguarde antes de rolar novamente.',
+        } satisfies RoomErrorPayload);
+        return;
+      }
+
       const result = sm.rollDice(payload.sessionId, payload.playerId);
 
       io.to(payload.sessionId).emit(EVENTS.TURN_RESULT, {
@@ -43,8 +62,21 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
           const gameResult = sm.finishGame(payload.sessionId);
           const finished: GameFinishedPayload = gameResult;
           io.to(payload.sessionId).emit(EVENTS.GAME_FINISHED, finished);
-        } catch {
-          // sessão já encerrada ou erro inesperado — não bloqueia o fluxo
+
+          // Persiste resultado no MongoDB (fire-and-forget — não bloqueia o fluxo)
+          const sessionData = sm.getById(payload.sessionId);
+          if (sessionData) {
+            GameResultModel.create({
+              sessionId: payload.sessionId,
+              pin: sessionData.pin,
+              sessionName: sessionData.name,
+              players: gameResult.players,
+              durationSeconds: gameResult.durationSeconds,
+              playedAt: new Date(),
+            }).catch((err) => console.error('[db] GameResult save failed:', err));
+          }
+        } catch (err) {
+          console.error('[game] finish error:', err);
         }
         return;
       }
@@ -117,5 +149,9 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
         msg === 'NOT_YOUR_TURN' ? 'NOT_YOUR_TURN' : 'ROOM_NOT_FOUND';
       socket.emit(EVENTS.ROOM_ERROR, { code, message: msg } satisfies RoomErrorPayload);
     }
+  });
+
+  socket.on('disconnect', () => {
+    lastRollAt.delete(socket.id);
   });
 }

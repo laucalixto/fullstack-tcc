@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createHash } from 'node:crypto';
+import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import type { PlayerStore } from './PlayerStore.js';
 
@@ -12,14 +12,10 @@ const RegisterSchema = z.object({
   sessionScore: z.number().int().nonnegative().optional(),
 });
 
-function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
-}
-
 export function createPlayerRouter(store: PlayerStore): Router {
   const router = Router();
 
-  router.post('/register', (req, res) => {
+  router.post('/register', async (req, res) => {
     const parsed = RegisterSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Campos obrigatórios ausentes ou inválidos.' });
@@ -29,17 +25,20 @@ export function createPlayerRouter(store: PlayerStore): Router {
     const { firstName, lastName, email, industrialUnit, password, sessionScore } =
       parsed.data;
 
-    if (store.existsByEmail(email)) {
+    if (await store.existsByEmailAsync(email)) {
       res.status(409).json({ error: 'E-mail já cadastrado.' });
       return;
     }
 
-    const record = store.create({
+    const rounds = Number(process.env.BCRYPT_ROUNDS ?? 12);
+    const passwordHash = await bcrypt.hash(password, rounds);
+
+    const record = await store.createAsync({
       firstName,
       lastName,
       email,
       industrialUnit,
-      passwordHash: hashPassword(password),
+      passwordHash,
       totalScore: sessionScore ?? 0,
     });
 

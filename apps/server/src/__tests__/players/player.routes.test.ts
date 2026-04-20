@@ -1,7 +1,21 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
+import { randomUUID } from 'node:crypto';
 import { createApp } from '../../app.js';
 import { PlayerStore } from '../../players/PlayerStore.js';
+
+// Mock do modelo para evitar timeout de conexão no MongoDB
+vi.mock('../../db/models/Player.model.js', () => ({
+  PlayerModel: {
+    findOne: vi.fn().mockResolvedValue(null),
+    create: vi.fn().mockImplementation((data) => Promise.resolve({ id: `id-${data.email}`, ...data })),
+    find: vi.fn().mockReturnValue({
+      sort: vi.fn().mockReturnValue({
+        limit: vi.fn().mockResolvedValue([]),
+      }),
+    }),
+  },
+}));
 
 // ─── RED: falha até PlayerStore e player.router.ts serem implementados ─────────
 
@@ -60,6 +74,21 @@ describe('POST /api/players/register', () => {
 
     const lb = await request(app).get('/api/leaderboard');
     expect(lb.body[0].totalScore).toBe(250);
+  });
+
+  it('armazena a senha usando bcrypt (deve começar com $2[ayb]$)', async () => {
+    const email = 'bcrypt-test@empresa.com';
+    await request(app).post('/api/players/register').send({
+      firstName: 'Bcrypt',
+      lastName: 'Test',
+      email,
+      industrialUnit: 'u-test',
+      password: 'mypassword',
+    });
+
+    const player = store.findByEmail(email);
+    // Regex para hash bcrypt padrão ($2b$, $2a$ ou $2y$ seguido de rounds e salt/hash)
+    expect(player?.passwordHash).toMatch(/^\$2[ayb]\$.{56}$/);
   });
 });
 

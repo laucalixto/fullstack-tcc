@@ -17,13 +17,13 @@ export function createAuthRouter(store: FacilitatorStore): Router {
 
     const { email, password, name } = parsed.data;
 
-    if (store.existsByEmail(email)) {
+    if (await store.existsByEmailAsync(email)) {
       res.status(409).json({ error: 'Email already registered' });
       return;
     }
 
     const passwordHash = await AuthService.hashPassword(password);
-    const facilitator = store.create({ email, name, passwordHash });
+    const facilitator = await store.createAsync({ email, name, passwordHash });
     const token = AuthService.generateToken({ facilitatorId: facilitator.id });
 
     res.status(201).json({ token });
@@ -38,7 +38,7 @@ export function createAuthRouter(store: FacilitatorStore): Router {
     }
 
     const { email, password } = parsed.data;
-    const facilitator = store.findByEmail(email);
+    const facilitator = await store.findByEmailAsync(email);
 
     if (!facilitator) {
       res.status(401).json({ error: 'Invalid credentials' });

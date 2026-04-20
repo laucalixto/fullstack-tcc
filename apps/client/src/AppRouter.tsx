@@ -2,6 +2,10 @@ import { Routes, Route, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
 import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload, GameStartingPayload, RoomJoinedPayload } from '@safety-board/shared';
 
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { GameGuard } from './components/GameGuard';
+import { PinJoinPage } from './lobby/PinJoinPage';
+
 import { PinEntry } from './lobby/PinEntry';
 import { CharacterSelect } from './lobby/CharacterSelect';
 import { LobbyWaiting } from './lobby/LobbyWaiting';
@@ -16,6 +20,8 @@ import { GlobalLeaderboard } from './results/GlobalLeaderboard';
 import { ManagerLogin } from './manager/ManagerLogin';
 import { ManagerDashboard } from './manager/ManagerDashboard';
 import { NewSessionForm } from './manager/NewSessionForm';
+import { audioManager } from './audio/AudioManager';
+import { MuteButton } from './audio/MuteButton';
 
 import { useGameStore } from './stores/gameStore';
 import { useManagerStore } from './stores/managerStore';
@@ -38,6 +44,10 @@ function PinEntryPage() {
   const setSession = useGameStore((s) => s.setSession);
   const [roomError, setRoomError] = useState<string | undefined>();
 
+  useEffect(() => {
+    audioManager.startLobbyTrack();
+  }, []);
+
   const handleJoin = useCallback((pin: string) => {
     setRoomError(undefined);
     socket.emit(EVENTS.ROOM_JOIN, { pin, playerName: 'Jogador' });
@@ -55,11 +65,16 @@ function PinEntryPage() {
   }, [navigate, setMyPlayerId, setSession]);
 
   return (
-    <PinEntry
-      onJoin={handleJoin}
-      error={roomError}
-      onPinChange={() => setRoomError(undefined)}
-    />
+    <>
+      <div className="fixed top-6 right-8 z-50">
+        <MuteButton />
+      </div>
+      <PinEntry
+        onJoin={handleJoin}
+        error={roomError}
+        onPinChange={() => setRoomError(undefined)}
+      />
+    </>
   );
 }
 
@@ -79,7 +94,14 @@ function CharacterSelectPage() {
     navigate('/lobby');
   }, [navigate, session?.id, myPlayerId, setPendingPlayer]);
 
-  return <CharacterSelect onConfirm={handleConfirm} />;
+  return (
+    <>
+      <div className="fixed top-6 right-8 z-50">
+        <MuteButton />
+      </div>
+      <CharacterSelect onConfirm={handleConfirm} />
+    </>
+  );
 }
 
 function LobbyWaitingPage() {
@@ -123,20 +145,30 @@ function LobbyWaitingPage() {
   }, [navigate, setSession]));
 
   return (
-    <LobbyWaiting
-      players={players}
-      pin={pin}
-      sessionName={sessionName}
-      maxPlayers={maxPlayers}
-      autoStartAt={autoStartAt}
-      onStart={() => {}}
-      isFacilitator={false}
-    />
+    <>
+      <div className="fixed top-6 right-8 z-50">
+        <MuteButton />
+      </div>
+      <LobbyWaiting
+        players={players}
+        pin={pin}
+        sessionName={sessionName}
+        maxPlayers={maxPlayers}
+        autoStartAt={autoStartAt}
+        onStart={() => {}}
+        isFacilitator={false}
+      />
+    </>
   );
 }
 
 function TutorialPage() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    audioManager.stopLobbyTrack();
+  }, []);
+
   return <TutorialOverlay open onClose={() => navigate('/carregando')} />;
 }
 
@@ -349,19 +381,25 @@ function NewSessionFormPage() {
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<PinEntryPage />} />
-      <Route path="/personagem" element={<CharacterSelectPage />} />
-      <Route path="/lobby" element={<LobbyWaitingPage />} />
-      <Route path="/tutorial" element={<TutorialPage />} />
-      <Route path="/carregando" element={<GameLoadingPage />} />
-      <Route path="/jogo" element={<GamePage />} />
-      <Route path="/podio" element={<PodiumPage />} />
-      <Route path="/resultado" element={<IndividualResultPage />} />
-      <Route path="/cadastrar" element={<PlayerSignupPage />} />
-      <Route path="/ranking" element={<GlobalLeaderboardPage />} />
-      <Route path="/manager" element={<ManagerLoginPage />} />
-      <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
-      <Route path="/manager/nova-sessao" element={<NewSessionFormPage />} />
+      {/* Acesso público */}
+      <Route path="/"          element={<PinEntryPage />} />
+      <Route path="/sala/:pin" element={<PinJoinPage />} />
+      <Route path="/manager"   element={<ManagerLoginPage />} />
+      <Route path="/ranking"   element={<GlobalLeaderboardPage />} />
+
+      {/* Requer sessão ativa na store */}
+      <Route path="/personagem" element={<GameGuard><CharacterSelectPage /></GameGuard>} />
+      <Route path="/lobby"      element={<GameGuard><LobbyWaitingPage /></GameGuard>} />
+      <Route path="/tutorial"   element={<GameGuard><TutorialPage /></GameGuard>} />
+      <Route path="/carregando" element={<GameGuard><GameLoadingPage /></GameGuard>} />
+      <Route path="/jogo"       element={<GameGuard><GamePage /></GameGuard>} />
+      <Route path="/podio"      element={<GameGuard><PodiumPage /></GameGuard>} />
+      <Route path="/resultado"  element={<GameGuard><IndividualResultPage /></GameGuard>} />
+      <Route path="/cadastrar"  element={<GameGuard><PlayerSignupPage /></GameGuard>} />
+
+      {/* Área do manager — requer JWT */}
+      <Route path="/manager/dashboard"   element={<ProtectedRoute><ManagerDashboardPage /></ProtectedRoute>} />
+      <Route path="/manager/nova-sessao" element={<ProtectedRoute><NewSessionFormPage /></ProtectedRoute>} />
     </Routes>
   );
 }

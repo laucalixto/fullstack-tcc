@@ -14,6 +14,9 @@ import { gameBus } from './EventBus';
 import type { TurnChangedPayload, TurnResultPayload, TileEffectDefinition } from '@safety-board/shared';
 import { DICE_ZONE } from './dice/DicePhysics';
 import { BOARD_PATH } from '@safety-board/shared';
+import { audioManager } from '../audio/AudioManager';
+import { cardAudioCategory } from '../audio/cardAudioCategory';
+import { MuteButton } from '../audio/MuteButton';
 
 export const QUIZ_OPEN_DELAY_MS = 2000;
 export const EFFECT_OPEN_DELAY_MS = 2000;
@@ -75,6 +78,12 @@ export function GamePage() {
     }
   }, []);
 
+  // Trilha sonora do tabuleiro
+  useEffect(() => {
+    audioManager.startBoardTrack();
+    return () => { audioManager.stopBoardTrack(); };
+  }, []);
+
   useEffect(() => {
     function onGameState(s: GameSession) {
       setSession(s);
@@ -102,6 +111,7 @@ export function GamePage() {
 
     function onQuizQuestion(payload: QuizQuestionPayload) {
       if (payload.playerId !== useGameStore.getState().myPlayerId) return;
+      audioManager.duckForQuiz();
       setQuizResult(undefined);
       quizPendingRef.current = payload;
       // Fallback de 7s: abre o quiz se pawn:done nunca disparar (ex: peão não moveu)
@@ -131,7 +141,10 @@ export function GamePage() {
 
     function onQuizResult(payload: { correct: boolean }) {
       setQuizResult(payload.correct ? 'correct' : 'incorrect');
-      setTimeout(() => setQuizPayload(null), 2000);
+      setTimeout(() => {
+        setQuizPayload(null);
+        audioManager.unduckFromQuiz();
+      }, 2000);
     }
 
     function onGameFinished(result: GameResultPayload) {
@@ -180,6 +193,8 @@ export function GamePage() {
       const pendingEffect = effectPendingRef.current;
       if (pendingEffect) {
         effectPendingRef.current = null;
+        const category = cardAudioCategory(pendingEffect.card.type);
+        audioManager.playCardStinger(category);
         setTimeout(() => setEffectCardPayload(pendingEffect.card), EFFECT_OPEN_DELAY_MS);
       }
       setVictoryPending((wasPending) => {
@@ -210,6 +225,7 @@ export function GamePage() {
 
   const handleEffectCardClose = useCallback(() => {
     if (!effectCardPayload) return;
+    audioManager.stopCardStinger();
     setEffectCardPayload(null);
     if (session && myPlayerId) {
       socket.emit(EVENTS.TILE_EFFECT_ACK, { sessionId: session.id, playerId: myPlayerId });
@@ -281,6 +297,11 @@ export function GamePage() {
 
       {/* ── HUD overlay ── */}
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+
+        {/* MuteButton — superior direito */}
+        <div className="absolute top-6 right-8 z-40" style={{ pointerEvents: 'auto' }}>
+          <MuteButton />
+        </div>
 
         {/* Left panel — "Equipe na Sessão" glass-card */}
         <div

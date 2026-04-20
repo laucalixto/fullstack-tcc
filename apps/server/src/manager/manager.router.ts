@@ -12,8 +12,8 @@ export function createManagerRouter(
 
   router.use(jwtMiddleware);
 
-  router.get('/stats', (_req, res) => {
-    const leaderboard = playerStore.leaderboard();
+  router.get('/stats', async (_req, res) => {
+    const leaderboard = await playerStore.leaderboard();
     const totalPlayers = leaderboard.length;
 
     const avgScore =
