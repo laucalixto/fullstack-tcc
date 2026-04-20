@@ -24,6 +24,7 @@ import { audioManager } from './audio/AudioManager';
 import { MuteButton } from './audio/MuteButton';
 
 import { useGameStore } from './stores/gameStore';
+import { useAudioStore } from './stores/audioStore';
 import { useManagerStore } from './stores/managerStore';
 import { useSocket } from './hooks/useSocket';
 import { socket } from './ws/socket';
@@ -45,6 +46,7 @@ function PinEntryPage() {
   const [roomError, setRoomError] = useState<string | undefined>();
 
   useEffect(() => {
+    audioManager.syncMuted(useAudioStore.getState().muted);
     audioManager.startLobbyTrack();
   }, []);
 

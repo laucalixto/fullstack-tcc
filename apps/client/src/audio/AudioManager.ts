@@ -26,6 +26,12 @@ export class AudioManager {
     Howler.mute(muted);
   }
 
+  /** Sincroniza o estado inicial de mute a partir do store persistido (no-op se já correto). */
+  syncMuted(muted: boolean): void {
+    this.muted = muted;
+    Howler.mute(muted);
+  }
+
   isMuted(): boolean { return this.muted; }
 
   startLobbyTrack(): void {
@@ -36,8 +42,10 @@ export class AudioManager {
 
   stopLobbyTrack(): void {
     if (!this.lobbyTrack) return;
-    this.lobbyTrack.fade(this.lobbyTrack.volume(), 0, FADE_MS);
-    setTimeout(() => { this.lobbyTrack?.stop(); this.lobbyTrack = null; }, FADE_MS + 50);
+    const track = this.lobbyTrack;
+    this.lobbyTrack = null;
+    track.fade(track.volume(), 0, FADE_MS);
+    setTimeout(() => { track.stop(); track.unload(); }, FADE_MS + 50);
   }
 
   startBoardTrack(): void {
@@ -48,20 +56,28 @@ export class AudioManager {
 
   stopBoardTrack(): void {
     if (!this.boardTrack) return;
-    this.boardTrack.fade(FULL_VOLUME, 0, FADE_MS);
-    setTimeout(() => { this.boardTrack?.stop(); this.boardTrack = null; }, FADE_MS + 50);
+    const track = this.boardTrack;
+    this.boardTrack = null;
+    track.fade(FULL_VOLUME, 0, FADE_MS);
+    setTimeout(() => { track.stop(); track.unload(); }, FADE_MS + 50);
   }
 
   playCardStinger(category: CardCategory): void {
     if (this.boardTrack) this.boardTrack.fade(this.boardTrack.volume(), DUCK_BOARD_VOLUME, FADE_MS);
-    this.activeStinger?.stop();
+    if (this.activeStinger) {
+      this.activeStinger.stop();
+      this.activeStinger.unload();
+    }
     this.activeStinger = new Howl({ src: [STINGERS[category]], volume: FULL_VOLUME });
     if (!this.muted) this.activeStinger.play();
   }
 
   stopCardStinger(): void {
-    this.activeStinger?.stop();
-    this.activeStinger = null;
+    if (this.activeStinger) {
+      this.activeStinger.stop();
+      this.activeStinger.unload();
+      this.activeStinger = null;
+    }
     if (this.boardTrack) this.boardTrack.fade(this.boardTrack.volume(), FULL_VOLUME, FADE_MS);
   }
 
@@ -74,9 +90,9 @@ export class AudioManager {
   }
 
   private stopAll(): void {
-    this.boardTrack?.stop();    this.boardTrack = null;
-    this.lobbyTrack?.stop();    this.lobbyTrack = null;
-    this.activeStinger?.stop(); this.activeStinger = null;
+    if (this.boardTrack)    { this.boardTrack.stop();    this.boardTrack.unload();    this.boardTrack    = null; }
+    if (this.lobbyTrack)    { this.lobbyTrack.stop();    this.lobbyTrack.unload();    this.lobbyTrack    = null; }
+    if (this.activeStinger) { this.activeStinger.stop(); this.activeStinger.unload(); this.activeStinger = null; }
   }
 }
 

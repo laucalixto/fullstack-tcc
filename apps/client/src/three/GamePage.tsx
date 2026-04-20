@@ -48,6 +48,7 @@ export function GamePage() {
   // Quiz pendente e seu fallback controlados por refs — sem corrida com useEffect
   const quizPendingRef       = useRef<QuizQuestionPayload | null>(null);
   const quizFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quizResultTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // EffectCard pendente — mesmo padrão do quiz
   const effectPendingRef       = useRef<{ card: TileEffectDefinition; playerId: string } | null>(null);
@@ -141,9 +142,11 @@ export function GamePage() {
 
     function onQuizResult(payload: { correct: boolean }) {
       setQuizResult(payload.correct ? 'correct' : 'incorrect');
-      setTimeout(() => {
+      if (quizResultTimerRef.current) clearTimeout(quizResultTimerRef.current);
+      quizResultTimerRef.current = setTimeout(() => {
         setQuizPayload(null);
         audioManager.unduckFromQuiz();
+        quizResultTimerRef.current = null;
       }, 2000);
     }
 
@@ -217,8 +220,9 @@ export function GamePage() {
       unsubDiceDone();
       unsubRollStart();
       unsubPawnDone();
-      if (quizFallbackTimerRef.current) clearTimeout(quizFallbackTimerRef.current);
+      if (quizFallbackTimerRef.current)  clearTimeout(quizFallbackTimerRef.current);
       if (effectFallbackTimerRef.current) clearTimeout(effectFallbackTimerRef.current);
+      if (quizResultTimerRef.current)    { clearTimeout(quizResultTimerRef.current); audioManager.unduckFromQuiz(); }
       socket.off(EVENTS.TILE_EFFECT, onTileEffect);
     };
   }, [navigate, setSession, setGameResult]);
