@@ -49,5 +49,8 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Create server .env for E2E
+        run: printf 'PORT=3001\nCLIENT_URL=http://localhost:5173\nJWT_SECRET=e2e-ci-secret-placeholder\nBCRYPT_ROUNDS=4\nMONGODB_URI=mongodb://localhost:27017/safety-board-e2e\n' > apps/server/.env
+
       - name: E2E smoke test
         run: pnpm test:e2e
