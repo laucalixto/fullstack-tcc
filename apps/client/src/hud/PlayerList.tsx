@@ -10,7 +10,7 @@ export function PlayerList({ players, currentPlayerIndex, myPlayerId }: PlayerLi
   return (
     <ul
       data-testid="player-list"
-      className="space-y-2"
+      className="space-y-3"
       style={{ pointerEvents: 'none' }}
     >
       {players.map((player, i) => {
@@ -23,8 +23,10 @@ export function PlayerList({ players, currentPlayerIndex, myPlayerId }: PlayerLi
             aria-current={isActive ? 'true' : 'false'}
             data-me={isMe ? 'true' : 'false'}
             className={[
-              'flex items-center justify-between transition-opacity',
-              !isActive ? 'opacity-60' : '',
+              'flex items-center justify-between rounded-xl px-3 py-2.5 transition-all',
+              isActive
+                ? 'bg-primary/20 border border-primary/40'
+                : 'opacity-60',
             ].join(' ')}
           >
             {/* Avatar + info */}
@@ -33,40 +35,53 @@ export function PlayerList({ players, currentPlayerIndex, myPlayerId }: PlayerLi
                 <div className={[
                   'w-9 h-9 rounded-full flex items-center justify-center text-sm font-black',
                   isActive
-                    ? 'bg-primary/10 text-primary border-2 border-primary shadow-sm'
-                    : 'bg-stone-100 text-stone-500 border border-stone-200',
+                    ? 'bg-primary text-white shadow-md shadow-primary/40'
+                    : 'bg-white/15 text-white/80',
                 ].join(' ')}>
                   {player.name.charAt(0).toUpperCase()}
                 </div>
                 <span className={[
-                  'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white',
-                  player.isConnected ? 'bg-green-500' : 'bg-red-400',
+                  'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-stone-900',
+                  player.isConnected ? 'bg-emerald-400' : 'bg-red-400',
                 ].join(' ')} />
               </div>
 
               <div className="min-w-0">
-                <p className="text-xs font-bold text-stone-900 leading-tight truncate">
+                <p className={[
+                  'text-xs font-bold leading-tight truncate',
+                  isActive ? 'text-white' : 'text-white/80',
+                ].join(' ')}>
                   {isMe ? `${player.name} (Você)` : player.name}
                 </p>
-                <p className="text-[10px] text-stone-400 font-medium leading-tight">
-                  Casa {player.position}
-                  <span className="mx-1 opacity-50">·</span>
-                  {player.score} pts
-                </p>
+
+                {/* Score e posição — maior e visível */}
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className={[
+                    'text-sm font-black tabular-nums leading-tight',
+                    isActive ? 'text-primary-fixed' : 'text-white/90',
+                  ].join(' ')}>
+                    {player.score}
+                    <span className="text-[10px] font-bold ml-0.5 opacity-70">pts</span>
+                  </span>
+                  <span className="text-[10px] text-white/40 font-medium">·</span>
+                  <span className="text-[10px] text-white/60 font-medium">
+                    casa {player.position}
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Status direito */}
             <div className="shrink-0 ml-2">
               {isActive && (
-                <span className="text-[10px] font-bold text-primary uppercase tracking-wide">
-                  Sua vez
+                <span className="text-[9px] font-black text-primary uppercase tracking-wider px-1.5 py-0.5 bg-primary/20 rounded-full">
+                  Vez
                 </span>
               )}
               {!player.isConnected && (
                 <span
                   data-testid={`player-disconnected-${player.id}`}
-                  className="text-[10px] font-bold text-red-400"
+                  className="text-[9px] font-bold text-red-400"
                 >
                   offline
                 </span>

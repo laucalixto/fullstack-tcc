@@ -309,11 +309,11 @@ export function GamePage() {
 
         {/* Left panel — "Equipe na Sessão" glass-card */}
         <div
-          className="absolute left-8 top-6 z-30 w-64"
+          className="absolute left-6 top-6 z-30 w-60"
           style={{ pointerEvents: 'none' }}
         >
-          <div className="bg-white/70 backdrop-blur-xl border border-white/50 rounded-2xl p-5 shadow-lg">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-4">
+          <div className="bg-stone-950/75 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl">
+            <h4 className="text-[9px] font-black uppercase tracking-widest text-white/40 mb-3 px-1">
               Equipe na Sessão
             </h4>
             <PlayerList
