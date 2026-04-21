@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BOARD_PATH, getTileByIndex, isFinishTile, isStartTile, isQuizTile, getNormForTile, QUIZ_TILE_INDICES } from '../board';
+import { BOARD_PATH, getTileByIndex, isFinishTile, isStartTile, isQuizTile, getNormForTile, QUIZ_TILE_INDICES, isTileEffect } from '../board';
 
 // ─── RED: falha até board.ts ser implementado ─────────────────────────────────
 
@@ -134,5 +134,15 @@ describe('getNormForTile', () => {
 
   it('se activeNormIds tiver menos zonas que grupos, usa a última norma', () => {
     expect(getNormForTile(35, ['NR-A'])).toBe('NR-A');
+  });
+});
+
+describe('isTileEffect', () => {
+  it('retorna true para índice que possui efeito de tile', () => {
+    expect(isTileEffect(2)).toBe(true);
+  });
+
+  it('retorna false para índice sem efeito de tile', () => {
+    expect(isTileEffect(1)).toBe(false);
   });
 });
