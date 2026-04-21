@@ -83,7 +83,7 @@ export function createManagerRouter(
       const header = 'sessionId,sessionName,pin,startedAt,finishedAt,durationSeconds,playerId,playerName,score,rank,correctAnswers,totalAnswers,dropped';
       const rows: string[] = [header];
       for (const r of results) {
-        for (const p of (r.players as Array<Record<string, unknown>>)) {
+        for (const p of (r.players as unknown as Array<Record<string, unknown>>)) {
           rows.push([
             r.sessionId, r.sessionName, r.pin,
             r.startedAt ? new Date(r.startedAt as Date).toISOString() : '',
@@ -151,7 +151,7 @@ export function createManagerRouter(
         finishedAt: doc.finishedAt ? new Date(doc.finishedAt as Date).toISOString() : null,
         durationSeconds: (doc.durationSeconds as number) ?? null,
         status: 'completed',
-        players: (doc.players as Array<Record<string, unknown>>).map((p) => ({
+        players: (doc.players as unknown as Array<Record<string, unknown>>).map((p) => ({
           playerId: p.playerId as string,
           name: p.name as string,
           score: p.score as number,
