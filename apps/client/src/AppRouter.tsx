@@ -15,6 +15,7 @@ import { GameLoading } from './lobby/GameLoading';
 import { TutorialOverlay } from './lobby/TutorialOverlay';
 import { ThreeCanvas } from './three/ThreeCanvas';
 import { GamePage } from './three/GamePage';
+import { BoardPreview } from './three/BoardPreview';
 import { PodiumResults } from './results/PodiumResults';
 import { IndividualCard } from './results/IndividualCard';
 import { PlayerSignup } from './results/PlayerSignup';
@@ -956,6 +957,7 @@ export function AppRouter() {
     <Routes>
       {/* Acesso público */}
       <Route path="/"          element={<PinEntryPage />} />
+      {import.meta.env.DEV && <Route path="/preview" element={<BoardPreview />} />}
       <Route path="/sala/:pin" element={<PinJoinPage />} />
       <Route path="/manager"   element={<ManagerLoginPage />} />
       <Route path="/ranking"   element={<GlobalLeaderboardPage />} />

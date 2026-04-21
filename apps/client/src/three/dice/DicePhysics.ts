@@ -4,8 +4,8 @@ import { FACE_QUATERNIONS } from './faceRotations';
 
 export type DiceState = 'idle' | 'spinning' | 'decelerating' | 'done';
 
-// Posição fixa da zona de rolagem — à direita do tabuleiro
-export const DICE_ZONE = { x: 12, y: 0.5, z: 4 } as const;
+// Posição fixa da zona de rolagem — à frente do início do tabuleiro, levemente à direita
+export const DICE_ZONE = { x: 0, y: 0.5, z: -3.5 } as const;
 
 const SPIN_DURATION  = 1.2; // segundos de rotação rápida + queda
 const DECEL_DURATION = 0.8; // segundos de desaceleração suave até face correta

@@ -39,8 +39,7 @@ export function initThreeScene(container: HTMLDivElement): () => void {
     0.1,
     100,
   );
-  camera.position.set(18, 14, 18);
-  camera.lookAt(4.5, 0, 4.5);
+  // Posição inicial configurada pelo CameraController.snapToOverview() abaixo
 
   // Lights
   const ambient = new THREE.AmbientLight(0xffffff, 0.5);
@@ -63,10 +62,17 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
   controls.minDistance = 4;
-  controls.maxDistance = 30;
+  controls.maxDistance = 40;
   controls.maxPolarAngle = Math.PI / 2;
 
   const cameraController = new CameraController(camera, controls);
+  cameraController.snapToOverview();
+
+  // Expõe câmera e controls para o BoardPreview GUI (apenas em dev)
+  if (import.meta.env.DEV) {
+    (window as Record<string, unknown>).__previewCamera__ = camera;
+    (window as Record<string, unknown>).__previewControls__ = controls;
+  }
 
   // PawnManager
   const pawnManager = new PawnManager(scene);
@@ -123,7 +129,8 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   const unsubActive = gameBus.on<{ tileIndex: number; playerId?: string }>('active:player', ({ tileIndex }) => {
     const tile = BOARD_PATH[tileIndex] ?? BOARD_PATH[0];
     activePos.set(tile.x, tile.y, tile.z);
-    if (!diceRolling) {
+    // Não sobrescreve câmera enquanto overview mode está ativo ou dado rolando
+    if (!diceRolling && !cameraController.overviewMode) {
       cameraController.snapToPlayer(activePos);
     }
   });
@@ -135,6 +142,7 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   const unsubDiceThrow = gameBus.on<{ position: typeof DICE_ZONE }>('dice:throw', ({ position }) => {
     diceRolling = true;
     localDiceActive = true;
+    cameraController.disableOverviewMode();
     dicePhysics.throw(position);
     cameraController.panToDice(diceZoneVec);
   });
@@ -249,6 +257,10 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   return () => {
     cancelAnimationFrame(animId);
+    if (import.meta.env.DEV) {
+      delete (window as Record<string, unknown>).__previewCamera__;
+      delete (window as Record<string, unknown>).__previewControls__;
+    }
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('resize', onResize);
     unsubPlayers();

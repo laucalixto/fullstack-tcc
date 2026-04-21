@@ -16,6 +16,7 @@
     "@safety-board/shared": "workspace:*",
     "cannon-es": "^0.20.0",
     "howler": "^2.2.4",
+    "lil-gui": "^0.21.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.14.1",

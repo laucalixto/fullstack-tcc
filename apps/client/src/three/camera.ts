@@ -1,9 +1,14 @@
 import * as THREE from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-const ISO_OFFSET      = new THREE.Vector3(8, 10, 8);
-const DICE_ISO_OFFSET = new THREE.Vector3(4,  5,  4); // close-up para zona do dado
+// Direção canônica: câmera a noroeste-frente do peão — mesmo ângulo do overview.
+// Derivado de OVERVIEW: (cam - target) normalizado × distância desejada.
+const ISO_OFFSET      = new THREE.Vector3(-7, 8, 6);   // ~12 u — snap ao peão ativo
+const DICE_ISO_OFFSET = new THREE.Vector3(-3, 4, 3);   // ~6 u  — close-up do dado
 const LERP_FACTOR = 0.03;
+
+const OVERVIEW_POSITION = new THREE.Vector3(-4.16, 9.69, 12.36);
+const OVERVIEW_TARGET   = new THREE.Vector3(4.71, -0.25, 4.23);
 
 // Órbita de vitória — câmera gira em torno do campeão
 const VICTORY_RADIUS = 2.5;  // distância horizontal ao peão
@@ -15,6 +20,9 @@ export class CameraController {
   private readonly controls: OrbitControls;
   private lastInteractionTime = 0;
   private isReturning = false;
+
+  // Modo visão geral — ativo até o primeiro dado ser rolado
+  overviewMode = true;
 
   // Estado da câmera de vitória
   private victoryMode = false;
@@ -34,6 +42,19 @@ export class CameraController {
     });
   }
 
+  /** Posiciona câmera na visão geral do tabuleiro completo (estado inicial). */
+  snapToOverview(): void {
+    this.overviewMode = true;
+    this.camera.position.copy(OVERVIEW_POSITION);
+    this.controls.target.copy(OVERVIEW_TARGET);
+    this.controls.update();
+  }
+
+  /** Desativa modo visão geral — chamado após o primeiro dado ser rolado. */
+  disableOverviewMode(): void {
+    this.overviewMode = false;
+  }
+
   update(activeTilePosition: THREE.Vector3): void {
     if (this.victoryMode) {
       // Órbita lenta em torno do peão campeão
@@ -50,6 +71,8 @@ export class CameraController {
     }
 
     this.controls.update();
+
+    if (this.overviewMode) return;
 
     const idle = Date.now() - this.lastInteractionTime;
     if (idle > this.RETURN_DELAY_MS) {
@@ -96,6 +119,7 @@ export class CameraController {
 
   /** Inicia retorno suave (lerp) ao peão ativo após dado parar. */
   smoothReturnToPlayer(): void {
+    this.overviewMode = false;
     this.lastInteractionTime = 0;
     this.isReturning = true;
   }

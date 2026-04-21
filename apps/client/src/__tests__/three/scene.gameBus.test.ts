@@ -85,6 +85,9 @@ vi.mock('../../three/camera', () => ({
     smoothReturnToPlayer: vi.fn(),
     panToDice: vi.fn(),
     zoomToVictory: vi.fn(),
+    snapToOverview: vi.fn(),
+    disableOverviewMode: vi.fn(),
+    overviewMode: false, // começa falso no mock para não bloquear snapToPlayer nos testes
   })),
 }));
 
