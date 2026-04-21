@@ -116,4 +116,52 @@ describe('ManagerContentPage', () => {
     expect(screen.getByTestId('question-row-q1').textContent).toMatch(/Básico/i);
     expect(screen.getByTestId('question-row-q2').textContent).toMatch(/Interm/i);
   });
+
+  it('botão Cancelar fecha modo edição sem salvar', () => {
+    render(<ManagerContentPage {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('question-edit-q1'));
+    expect(screen.getByTestId('question-input-text-q1')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('question-cancel-q1'));
+    expect(screen.queryByTestId('question-input-text-q1')).not.toBeInTheDocument();
+  });
+
+  it('alteração de opção no modo edição atualiza campo', () => {
+    render(<ManagerContentPage {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('question-edit-q1'));
+    const optionInput = screen.getByTestId('question-option-0-q1');
+    fireEvent.change(optionInput, { target: { value: 'Opção Nova' } });
+    expect(optionInput).toHaveValue('Opção Nova');
+  });
+
+  it('pode adicionar nova opção ao formulário de nova questão', () => {
+    render(<ManagerContentPage {...defaultProps} />);
+    const addBtn = screen.getByText('+ Adicionar opção');
+    fireEvent.click(addBtn);
+    expect(screen.getByTestId('new-question-option-2')).toBeInTheDocument();
+  });
+
+  it('pode remover opção extra do formulário de nova questão', () => {
+    render(<ManagerContentPage {...defaultProps} />);
+    fireEvent.click(screen.getByText('+ Adicionar opção'));
+    expect(screen.getByTestId('new-question-option-2')).toBeInTheDocument();
+    const removeButtons = screen.getAllByText('✕');
+    fireEvent.click(removeButtons[0]);
+    expect(screen.queryByTestId('new-question-option-2')).not.toBeInTheDocument();
+  });
+
+  it('exibe botão excluir NR quando há mais de 4 normas', () => {
+    const manyNorms = [
+      { normId: 'NR-06', title: 'EPI' },
+      { normId: 'NR-10', title: 'Elétrica' },
+      { normId: 'NR-12', title: 'Máquinas' },
+      { normId: 'NR-35', title: 'Altura' },
+      { normId: 'NR-33', title: 'Espaços Confinados' },
+    ];
+    const onDeleteNorm = vi.fn();
+    render(<ManagerContentPage {...defaultProps} norms={manyNorms} onDeleteNorm={onDeleteNorm} />);
+    const deleteBtn = screen.getByTestId('delete-norm-btn-NR-06');
+    expect(deleteBtn).toBeInTheDocument();
+    fireEvent.click(deleteBtn);
+    expect(onDeleteNorm).toHaveBeenCalledWith('NR-06');
+  });
 });

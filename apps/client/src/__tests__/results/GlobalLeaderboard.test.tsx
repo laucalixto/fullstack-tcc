@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { GlobalLeaderboard } from '../../results/GlobalLeaderboard';
 import type { LeaderboardEntry } from '@safety-board/shared';
 
@@ -64,5 +64,37 @@ describe('GlobalLeaderboard', () => {
     render(<GlobalLeaderboard entries={makeEntries(2)} onViewProfile={onViewProfile} />);
     screen.getByTestId('leaderboard-entry-1').click();
     expect(onViewProfile).toHaveBeenCalledWith('player-0');
+  });
+
+  it('chama onViewDashboard ao clicar em "Visão Geral"', () => {
+    const onViewDashboard = vi.fn();
+    render(<GlobalLeaderboard entries={makeEntries(1)} playerName="Ana Silva" onViewDashboard={onViewDashboard} />);
+    const buttons = screen.getAllByText('Visão Geral');
+    fireEvent.click(buttons[0]);
+    expect(onViewDashboard).toHaveBeenCalled();
+  });
+
+  it('chama onViewHistory ao clicar em "Histórico"', () => {
+    const onViewHistory = vi.fn();
+    render(<GlobalLeaderboard entries={makeEntries(1)} playerName="Ana Silva" onViewHistory={onViewHistory} />);
+    const buttons = screen.getAllByText('Histórico');
+    fireEvent.click(buttons[0]);
+    expect(onViewHistory).toHaveBeenCalled();
+  });
+
+  it('chama onEditProfile ao clicar em "Perfil"', () => {
+    const onEditProfile = vi.fn();
+    render(<GlobalLeaderboard entries={makeEntries(1)} playerName="Ana Silva" onEditProfile={onEditProfile} />);
+    const buttons = screen.getAllByText('Perfil');
+    fireEvent.click(buttons[0]);
+    expect(onEditProfile).toHaveBeenCalled();
+  });
+
+  it('chama onLogout ao clicar em botão Sair', () => {
+    const onLogout = vi.fn();
+    render(<GlobalLeaderboard entries={makeEntries(1)} playerName="Ana Silva" onLogout={onLogout} />);
+    const logoutButtons = screen.getAllByText('Sair');
+    fireEvent.click(logoutButtons[0]);
+    expect(onLogout).toHaveBeenCalled();
   });
 });
