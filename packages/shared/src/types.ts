@@ -221,7 +221,7 @@ export interface QuizQuestionFull {
   difficulty: 'basic' | 'intermediate' | 'advanced';
 }
 
-export interface QuizQuestionPayload {
+export interface QuizQuestionInput {
   normId: string;
   text: string;
   options: string[];

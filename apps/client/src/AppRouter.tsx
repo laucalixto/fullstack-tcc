@@ -1,6 +1,6 @@
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
-import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload, GameStartingPayload, RoomJoinedPayload, ManagedPlayer, QuizQuestionFull, QuizQuestionPayload, SessionDetail } from '@safety-board/shared';
+import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload, GameStartingPayload, RoomJoinedPayload, ManagedPlayer, QuizQuestionFull, QuizQuestionInput, SessionDetail } from '@safety-board/shared';
 import { useParams } from 'react-router-dom';
 
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -584,7 +584,7 @@ function ManagerContentPageWrapper() {
     fetch(`${SERVER_URL}/api/questions`).then((r) => r.json()).then(setQuestions).catch(() => {});
   }, [SERVER_URL]);
 
-  async function handleSave(id: string, patch: QuizQuestionPayload) {
+  async function handleSave(id: string, patch: QuizQuestionInput) {
     if (!token) return;
     const res = await fetch(`${SERVER_URL}/api/questions/${id}`, {
       method: 'PATCH',
@@ -597,7 +597,7 @@ function ManagerContentPageWrapper() {
     }
   }
 
-  async function handleAdd(payload: QuizQuestionPayload) {
+  async function handleAdd(payload: QuizQuestionInput) {
     if (!token) return;
     const res = await fetch(`${SERVER_URL}/api/questions`, {
       method: 'POST',

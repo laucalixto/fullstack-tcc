@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ManagerContentPage } from '../../manager/ManagerContentPage';
-import type { QuizQuestionFull, QuizQuestionPayload } from '@safety-board/shared';
+import type { QuizQuestionFull, QuizQuestionInput } from '@safety-board/shared';
 
 // ─── RED: falha até ManagerContentPage.tsx ser implementado ──────────────────
 

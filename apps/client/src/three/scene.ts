@@ -70,8 +70,8 @@ export function initThreeScene(container: HTMLDivElement): () => void {
 
   // Expõe câmera e controls para o BoardPreview GUI (apenas em dev)
   if (import.meta.env.DEV) {
-    (window as Record<string, unknown>).__previewCamera__ = camera;
-    (window as Record<string, unknown>).__previewControls__ = controls;
+    (window as unknown as Record<string, unknown>).__previewCamera__ = camera;
+    (window as unknown as Record<string, unknown>).__previewControls__ = controls;
   }
 
   // PawnManager
@@ -258,8 +258,8 @@ export function initThreeScene(container: HTMLDivElement): () => void {
   return () => {
     cancelAnimationFrame(animId);
     if (import.meta.env.DEV) {
-      delete (window as Record<string, unknown>).__previewCamera__;
-      delete (window as Record<string, unknown>).__previewControls__;
+      delete (window as unknown as Record<string, unknown>).__previewCamera__;
+      delete (window as unknown as Record<string, unknown>).__previewControls__;
     }
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('resize', onResize);

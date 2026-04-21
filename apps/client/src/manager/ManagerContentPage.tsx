@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import type { QuizQuestionFull, QuizQuestionPayload } from '@safety-board/shared';
+import type { QuizQuestionFull, QuizQuestionInput } from '@safety-board/shared';
 
 interface ManagerContentPageProps {
   norms: Array<{ normId: string; title: string }>;
   questions: QuizQuestionFull[];
-  onSaveQuestion: (id: string, patch: QuizQuestionPayload) => void;
-  onAddQuestion: (payload: QuizQuestionPayload) => void;
+  onSaveQuestion: (id: string, patch: QuizQuestionInput) => void;
+  onAddQuestion: (payload: QuizQuestionInput) => void;
   onDeleteQuestion: (id: string) => void;
   onAddNorm: (normId: string, title: string) => void;
   onDeleteNorm: (normId: string) => void;

@@ -7,10 +7,10 @@ import { initThreeScene } from './scene';
 type Win = Record<string, unknown>;
 
 function getCamera() {
-  return (window as Win).__previewCamera__ as THREE.PerspectiveCamera | undefined;
+  return (window as unknown as Win).__previewCamera__ as THREE.PerspectiveCamera | undefined;
 }
 function getControls() {
-  return (window as Win).__previewControls__ as OrbitControls | undefined;
+  return (window as unknown as Win).__previewControls__ as OrbitControls | undefined;
 }
 
 export function BoardPreview() {
