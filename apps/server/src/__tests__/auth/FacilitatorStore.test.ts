@@ -39,7 +39,7 @@ describe('FacilitatorStore — MongoDB paths', () => {
     });
 
     it('busca no banco quando não está em cache', async () => {
-      vi.mocked(FacilitatorModel.findOne).mockResolvedValue(mockDoc);
+      vi.mocked(FacilitatorModel.findOne).mockResolvedValue(mockDoc as never);
       const result = await store.findByEmailAsync('gestor@empresa.com');
       expect(result?.email).toBe('gestor@empresa.com');
     });
@@ -80,7 +80,7 @@ describe('FacilitatorStore — MongoDB paths', () => {
     });
 
     it('busca no banco quando não está em cache', async () => {
-      vi.mocked(FacilitatorModel.findOne).mockResolvedValue(mockDoc);
+      vi.mocked(FacilitatorModel.findOne).mockResolvedValue(mockDoc as never);
       const result = await store.existsByEmailAsync('gestor@empresa.com');
       expect(result).toBe(true);
     });
