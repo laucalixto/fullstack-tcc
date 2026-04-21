@@ -3,45 +3,114 @@ import type { LeaderboardEntry } from '@safety-board/shared';
 interface GlobalLeaderboardProps {
   entries: LeaderboardEntry[];
   currentPlayerId?: string;
+  playerName?: string;
   onViewProfile?: (playerId: string) => void;
+  onViewDashboard?: () => void;
+  onViewHistory?: () => void;
+  onEditProfile?: () => void;
+  onLogout?: () => void;
 }
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
-export function GlobalLeaderboard({ entries, currentPlayerId, onViewProfile }: GlobalLeaderboardProps) {
+const NAV_ITEMS = [
+  { label: 'Visão Geral', key: 'overview' },
+  { label: 'Histórico',   key: 'history'  },
+  { label: 'Ranking',     key: 'ranking'  },
+  { label: 'Perfil',      key: 'profile'  },
+];
+
+export function GlobalLeaderboard({
+  entries, currentPlayerId, playerName,
+  onViewProfile, onViewDashboard, onViewHistory, onEditProfile, onLogout,
+}: GlobalLeaderboardProps) {
   const currentEntry = entries.find((e) => e.playerId === currentPlayerId);
+  const initial = playerName ? playerName.charAt(0).toUpperCase() : null;
+
+  function handleNavClick(key: string) {
+    if (key === 'overview') onViewDashboard?.();
+    if (key === 'history')  onViewHistory?.();
+    if (key === 'profile')  onEditProfile?.();
+  }
 
   return (
-    <div className="bg-surface text-on-surface antialiased flex min-h-screen font-body">
-      {/* Side nav — desktop */}
-      <aside className="h-screen w-64 hidden lg:flex flex-col border-r border-outline-variant/10 bg-gradient-to-b from-surface-bright to-surface-container-low fixed left-0 top-0 z-40">
-        <div className="p-6">
-          <h1 className="text-lg font-bold text-on-surface tracking-tighter">Dashboard</h1>
-        </div>
-        <nav className="flex flex-col gap-2 p-4">
-          <div className="flex items-center gap-3 px-4 py-3 bg-surface-container-lowest text-primary shadow-sm rounded-md font-semibold text-sm uppercase tracking-[0.05rem]">
-            <span className="text-lg">📊</span>
-            <span>Ranking</span>
-          </div>
-          <div className="flex items-center gap-3 px-4 py-3 text-on-surface/70 hover:bg-surface-bright transition-all rounded-md font-semibold text-sm uppercase tracking-[0.05rem] cursor-pointer">
-            <span className="text-lg">👤</span>
-            <span>Perfil</span>
-          </div>
-        </nav>
-      </aside>
+    <div className="bg-surface text-on-surface antialiased min-h-screen">
 
       {/* Top nav */}
-      <header className="fixed top-0 w-full z-50 bg-surface-bright/80 backdrop-blur-xl border-b border-outline-variant/10 shadow-sm lg:ml-64 lg:w-[calc(100%-16rem)]">
-        <div className="flex justify-between items-center px-6 h-16 w-full">
-          <div className="flex items-center gap-2">
-            <span className="text-primary text-xl">🛡</span>
-            <span className="text-xl font-black text-on-surface tracking-tighter uppercase">Safety Board</span>
+      <nav className="fixed top-0 w-full z-50 bg-surface-bright/80 backdrop-blur-xl border-b border-outline-variant/10 shadow-sm flex justify-between items-center px-6 h-16">
+        <span className="text-xl font-black uppercase tracking-tighter text-on-surface">Safety Board</span>
+        {playerName && (
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-sm font-black text-primary">
+              {initial}
+            </div>
+            <span className="text-sm font-bold text-on-surface hidden sm:block">{playerName}</span>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="ml-4 text-xs font-bold text-on-surface-variant hover:text-error transition-colors uppercase tracking-widest"
+              >
+                Sair
+              </button>
+            )}
           </div>
-        </div>
-      </header>
+        )}
+      </nav>
+
+      {/* Sidebar (desktop) */}
+      <aside className="h-full w-60 fixed left-0 top-0 z-40 bg-surface-container-low pt-20 hidden md:flex flex-col p-4 gap-2">
+        {playerName && (
+          <div className="mb-6 px-4">
+            <p className="text-[10px] font-bold tracking-widest text-on-surface/50 uppercase">Área do Jogador</p>
+            <p className="text-sm font-bold text-on-surface mt-1 truncate">{playerName}</p>
+          </div>
+        )}
+
+        <nav className="space-y-1">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => handleNavClick(item.key)}
+              className={`w-full flex items-center gap-3 p-3 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all text-left ${
+                item.key === 'ranking'
+                  ? 'bg-surface-container-lowest text-primary shadow-sm'
+                  : 'text-on-surface/60 hover:bg-surface-bright hover:translate-x-1 duration-300'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        {onLogout && (
+          <div className="mt-auto p-4">
+            <button
+              onClick={onLogout}
+              className="w-full py-3 bg-surface-container-high text-on-surface/60 font-bold rounded-md hover:bg-error/10 hover:text-error transition-colors uppercase text-[11px] tracking-widest active:scale-95"
+            >
+              Sair
+            </button>
+          </div>
+        )}
+      </aside>
+
+      {/* Mobile bottom nav */}
+      <nav className="md:hidden fixed bottom-0 w-full z-50 bg-surface-bright/90 backdrop-blur-xl border-t border-outline-variant/10 flex justify-around items-center h-14">
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.key}
+            onClick={() => handleNavClick(item.key)}
+            className={`flex-1 text-[10px] font-bold uppercase tracking-wider py-2 transition-colors ${
+              item.key === 'ranking' ? 'text-primary' : 'text-on-surface/60 hover:text-primary'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
 
       {/* Main */}
-      <main className="flex-1 mt-16 pb-24 lg:ml-64 lg:pb-8">
+      <main className="md:ml-60 pt-20 pb-20 md:pb-12 px-6 md:px-8 min-h-screen bg-surface">
         <div className="max-w-6xl mx-auto p-6 md:p-10">
           {/* Hero header */}
           <header className="mb-10">

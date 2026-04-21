@@ -63,4 +63,9 @@ describe('PinEntry', () => {
     fireEvent.change(input, { target: { value: '1234567890' } });
     expect((input as HTMLInputElement).value).toHaveLength(6);
   });
+
+  it('exibe link para login do jogador', () => {
+    render(<PinEntry onJoin={vi.fn()} />);
+    expect(screen.getByTestId('player-login-link')).toBeInTheDocument();
+  });
 });

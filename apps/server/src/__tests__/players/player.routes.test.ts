@@ -106,11 +106,11 @@ describe('GET /api/leaderboard', () => {
 
     await request(app).post('/api/players/register').send({
       firstName: 'Alice', lastName: 'S', email: 'a@e.com',
-      industrialUnit: 'u1', password: 'pass1', sessionScore: 500,
+      industrialUnit: 'u1', password: 'Senha@123', sessionScore: 500,
     });
     await request(app).post('/api/players/register').send({
       firstName: 'Bob', lastName: 'S', email: 'b@e.com',
-      industrialUnit: 'u2', password: 'pass2', sessionScore: 800,
+      industrialUnit: 'u2', password: 'Senha@456', sessionScore: 800,
     });
 
     const res = await request(app).get('/api/leaderboard');
@@ -125,7 +125,7 @@ describe('GET /api/leaderboard', () => {
 
     await request(app).post('/api/players/register').send({
       firstName: 'Carlos', lastName: 'Lima', email: 'c@e.com',
-      industrialUnit: 'refinaria', password: 'pass3', sessionScore: 300,
+      industrialUnit: 'refinaria', password: 'Senha@789', sessionScore: 300,
     });
 
     const res = await request(app).get('/api/leaderboard');
@@ -143,11 +143,11 @@ describe('GET /api/leaderboard', () => {
 
     await request(app).post('/api/players/register').send({
       firstName: 'A', lastName: 'X', email: 'ax@e.com',
-      industrialUnit: 'u1', password: 'p', sessionScore: 100,
+      industrialUnit: 'u1', password: 'Senha@100', sessionScore: 100,
     });
     await request(app).post('/api/players/register').send({
       firstName: 'B', lastName: 'X', email: 'bx@e.com',
-      industrialUnit: 'u2', password: 'p', sessionScore: 200,
+      industrialUnit: 'u2', password: 'Senha@200', sessionScore: 200,
     });
 
     const res = await request(app).get('/api/leaderboard');

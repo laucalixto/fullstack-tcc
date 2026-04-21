@@ -2,6 +2,8 @@ import type { GameResultPlayer } from '@safety-board/shared';
 
 interface IndividualCardProps {
   player: GameResultPlayer;
+  onRegister?: () => void;
+  onViewDashboard?: () => void;
 }
 
 function calcAccuracy(correct: number, total: number): string {
@@ -21,7 +23,7 @@ const RANK_LABEL: Record<number, string> = {
   4: 'Operador',
 };
 
-export function IndividualCard({ player }: IndividualCardProps) {
+export function IndividualCard({ player, onRegister, onViewDashboard }: IndividualCardProps) {
   const isWinner = player.rank === 1;
   const accuracyNum = calcAccuracyNum(player.correctAnswers, player.totalAnswers);
 
@@ -151,6 +153,28 @@ export function IndividualCard({ player }: IndividualCardProps) {
             <p className="text-right text-xs font-bold text-primary mt-1">{accuracyNum}%</p>
           </div>
         </section>
+
+        {(onViewDashboard || onRegister) && (
+          <section className="flex justify-center">
+            {onViewDashboard ? (
+              <button
+                data-testid="individual-card-dashboard-btn"
+                onClick={onViewDashboard}
+                className="rounded-lg bg-gradient-to-r from-secondary to-secondary-container px-10 py-4 text-sm font-black uppercase tracking-widest text-white shadow-xl transition-all hover:scale-[1.02] active:scale-95"
+              >
+                Ver meu painel
+              </button>
+            ) : (
+              <button
+                data-testid="individual-card-register-btn"
+                onClick={onRegister}
+                className="rounded-lg bg-gradient-to-r from-primary to-primary-container px-10 py-4 text-sm font-black uppercase tracking-widest text-white shadow-xl transition-all hover:scale-[1.02] active:scale-95"
+              >
+                Salvar meu progresso — Criar conta
+              </button>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );

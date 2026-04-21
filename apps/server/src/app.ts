@@ -47,6 +47,7 @@ export function createApp(options: AppOptions = {}): Express {
 
   const playerStore = options.playerStore ?? new PlayerStore();
   app.use('/api/players/register', registerLimiter);
+  app.use('/api/players/login', authLimiter);
   app.use('/api/players', createPlayerRouter(playerStore));
 
   app.get('/api/leaderboard', async (_req, res) => {

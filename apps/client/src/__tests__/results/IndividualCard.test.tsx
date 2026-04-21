@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { fireEvent } from '@testing-library/react';
 import { render, screen } from '@testing-library/react';
 import { IndividualCard } from '../../results/IndividualCard';
 import type { GameResultPlayer } from '@safety-board/shared';
@@ -68,5 +69,40 @@ describe('IndividualCard', () => {
   it('não marca outros colocados como vencedor', () => {
     render(<IndividualCard player={makePlayer({ rank: 3 })} />);
     expect(screen.getByTestId('individual-card')).toHaveAttribute('data-winner', 'false');
+  });
+
+  it('exibe botão de cadastro quando onRegister é fornecido', () => {
+    render(<IndividualCard player={makePlayer()} onRegister={vi.fn()} />);
+    expect(screen.getByTestId('individual-card-register-btn')).toBeInTheDocument();
+  });
+
+  it('chama onRegister ao clicar no botão de cadastro', () => {
+    const onRegister = vi.fn();
+    render(<IndividualCard player={makePlayer()} onRegister={onRegister} />);
+    fireEvent.click(screen.getByTestId('individual-card-register-btn'));
+    expect(onRegister).toHaveBeenCalled();
+  });
+
+  it('não exibe botão de cadastro quando onRegister não é fornecido', () => {
+    render(<IndividualCard player={makePlayer()} />);
+    expect(screen.queryByTestId('individual-card-register-btn')).not.toBeInTheDocument();
+  });
+
+  it('exibe botão de dashboard quando onViewDashboard é fornecido', () => {
+    render(<IndividualCard player={makePlayer()} onViewDashboard={vi.fn()} />);
+    expect(screen.getByTestId('individual-card-dashboard-btn')).toBeInTheDocument();
+  });
+
+  it('chama onViewDashboard ao clicar no botão de dashboard', () => {
+    const onViewDashboard = vi.fn();
+    render(<IndividualCard player={makePlayer()} onViewDashboard={onViewDashboard} />);
+    fireEvent.click(screen.getByTestId('individual-card-dashboard-btn'));
+    expect(onViewDashboard).toHaveBeenCalled();
+  });
+
+  it('não exibe ambos os botões simultaneamente', () => {
+    render(<IndividualCard player={makePlayer()} onRegister={vi.fn()} onViewDashboard={vi.fn()} />);
+    expect(screen.queryByTestId('individual-card-register-btn')).not.toBeInTheDocument();
+    expect(screen.getByTestId('individual-card-dashboard-btn')).toBeInTheDocument();
   });
 });

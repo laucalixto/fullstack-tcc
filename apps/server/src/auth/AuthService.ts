@@ -1,12 +1,13 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-const BCRYPT_ROUNDS = 12;
+const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS ?? 12);
 const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret-change-in-production';
 const JWT_EXPIRES_IN = '24h';
 
 export interface JwtPayload {
-  facilitatorId: string;
+  facilitatorId?: string;
+  playerId?: string;
   iat?: number;
   exp?: number;
 }
@@ -22,6 +23,13 @@ export class AuthService {
 
   static generateToken(
     payload: Pick<JwtPayload, 'facilitatorId'>,
+    expiresIn: string = JWT_EXPIRES_IN,
+  ): string {
+    return jwt.sign(payload, JWT_SECRET, { expiresIn } as jwt.SignOptions);
+  }
+
+  static generatePlayerToken(
+    payload: Pick<JwtPayload, 'playerId'>,
     expiresIn: string = JWT_EXPIRES_IN,
   ): string {
     return jwt.sign(payload, JWT_SECRET, { expiresIn } as jwt.SignOptions);

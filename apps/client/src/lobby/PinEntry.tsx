@@ -4,9 +4,10 @@ interface PinEntryProps {
   onJoin: (pin: string) => void;
   error?: string;
   onPinChange?: () => void;
+  onPlayerLogin?: () => void;
 }
 
-export function PinEntry({ onJoin, error, onPinChange }: PinEntryProps) {
+export function PinEntry({ onJoin, error, onPinChange, onPlayerLogin }: PinEntryProps) {
   const [pin, setPin] = useState('');
 
   function handlePinChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -83,6 +84,18 @@ export function PinEntry({ onJoin, error, onPinChange }: PinEntryProps) {
             </button>
           </div>
         </form>
+
+        <div className="mt-6 flex items-center justify-center gap-2 text-sm text-on-surface-variant">
+          <span>Já tem conta?</span>
+          <button
+            data-testid="player-login-link"
+            type="button"
+            onClick={onPlayerLogin}
+            className="font-bold text-secondary hover:text-on-secondary-container transition-colors"
+          >
+            Entrar na minha área
+          </button>
+        </div>
 
         {/* Footer badges */}
         <div className="mt-12 grid grid-cols-2 gap-8 w-full max-w-sm">

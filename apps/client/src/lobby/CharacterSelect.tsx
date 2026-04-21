@@ -6,15 +6,19 @@ interface CharacterSelectProps {
   onConfirm: (firstName: string, lastName: string, avatarId: string) => void;
   avatars?: AvatarOption[];
   takenAvatarIds?: string[];
+  initialFirstName?: string;
+  initialLastName?: string;
 }
 
 export function CharacterSelect({
   onConfirm,
   avatars = AVATARS,
   takenAvatarIds = [],
+  initialFirstName = '',
+  initialLastName = '',
 }: CharacterSelectProps) {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [firstName, setFirstName] = useState(initialFirstName);
+  const [lastName, setLastName] = useState(initialLastName);
   const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(null);
 
   const canConfirm =

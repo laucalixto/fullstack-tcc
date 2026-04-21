@@ -83,4 +83,19 @@ describe('PlayerSignup', () => {
     expect(screen.getByTestId('signup-submit')).toBeDisabled();
     expect(screen.getByTestId('signup-loading')).toBeInTheDocument();
   });
+
+  it('campo de senha inicia como type=password', () => {
+    render(<PlayerSignup onSignup={vi.fn()} />);
+    expect(screen.getByTestId('signup-password')).toHaveAttribute('type', 'password');
+  });
+
+  it('toggle alterna visibilidade da senha', () => {
+    render(<PlayerSignup onSignup={vi.fn()} />);
+    const input = screen.getByTestId('signup-password');
+    const toggle = screen.getByTestId('toggle-password-visibility');
+    fireEvent.click(toggle);
+    expect(input).toHaveAttribute('type', 'text');
+    fireEvent.click(toggle);
+    expect(input).toHaveAttribute('type', 'password');
+  });
 });

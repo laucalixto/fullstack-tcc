@@ -94,4 +94,27 @@ describe('CharacterSelect', () => {
     expect(screen.getByTestId('avatar-option-0')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByTestId('avatar-option-2')).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('preenche firstName com initialFirstName quando fornecido', () => {
+    render(<CharacterSelect onConfirm={vi.fn()} avatars={TEST_AVATARS} initialFirstName="Ana" />);
+    expect(screen.getByTestId('first-name-input')).toHaveValue('Ana');
+  });
+
+  it('preenche lastName com initialLastName quando fornecido', () => {
+    render(<CharacterSelect onConfirm={vi.fn()} avatars={TEST_AVATARS} initialLastName="Silva" />);
+    expect(screen.getByTestId('last-name-input')).toHaveValue('Silva');
+  });
+
+  it('botão habilitado imediatamente quando initialFirstName, initialLastName e avatar preenchidos', () => {
+    render(
+      <CharacterSelect
+        onConfirm={vi.fn()}
+        avatars={TEST_AVATARS}
+        initialFirstName="Ana"
+        initialLastName="Silva"
+      />,
+    );
+    fireEvent.click(screen.getByTestId('avatar-option-0'));
+    expect(screen.getByTestId('confirm-button')).not.toBeDisabled();
+  });
 });

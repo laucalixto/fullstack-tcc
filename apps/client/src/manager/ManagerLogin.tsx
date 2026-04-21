@@ -21,7 +21,7 @@ export function ManagerLogin({ onLogin, error, isLoading = false }: ManagerLogin
   }
 
   const inputClass =
-    'w-full bg-surface-container-high border-none border-b-2 border-outline-variant focus:border-primary focus:ring-0 px-4 py-4 text-sm font-medium transition-all duration-200 text-on-surface placeholder-on-surface/40';
+    'w-full bg-surface-container-high border-0 border-b-2 border-outline-variant focus:border-primary focus:outline-none px-4 py-4 text-sm font-medium transition-all duration-200 text-on-surface placeholder-on-surface/40';
 
   const labelClass =
     'text-[10px] uppercase tracking-[0.05rem] font-bold text-on-surface/60';
@@ -66,9 +66,6 @@ export function ManagerLogin({ onLogin, error, isLoading = false }: ManagerLogin
             <div className="space-y-1">
               <div className="flex justify-between items-end">
                 <label className={labelClass} htmlFor="login-pw">Senha de Segurança</label>
-                <a href="#" className="text-[10px] uppercase tracking-[0.05rem] font-bold text-primary hover:text-primary-container transition-colors">
-                  Esqueci minha senha
-                </a>
               </div>
               <div className="relative">
                 <input

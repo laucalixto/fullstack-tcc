@@ -20,6 +20,7 @@ export function PlayerSignup({ onSignup, error, isLoading = false }: PlayerSignu
   const [email, setEmail] = useState('');
   const [industrialUnit, setIndustrialUnit] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const canSubmit =
     !isLoading &&
@@ -156,15 +157,28 @@ export function PlayerSignup({ onSignup, error, isLoading = false }: PlayerSignu
             {/* Password */}
             <div>
               <label className={labelClass} htmlFor="signup-pw">Senha de Acesso</label>
-              <input
-                data-testid="signup-password"
-                id="signup-pw"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className={inputClass}
-              />
+              <div className="relative">
+                <input
+                  data-testid="signup-password"
+                  id="signup-pw"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className={`${inputClass} pr-10`}
+                />
+                <button
+                  type="button"
+                  data-testid="toggle-password-visibility"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 hover:text-primary transition-colors focus:outline-none"
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  <span className="material-symbols-outlined text-lg">
+                    {showPassword ? 'visibility' : 'visibility_off'}
+                  </span>
+                </button>
+              </div>
               <p className="mt-2 text-[10px] text-on-surface-variant/60">
                 Mínimo de 8 caracteres, incluindo símbolos e números.
               </p>

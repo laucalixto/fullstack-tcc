@@ -4,6 +4,7 @@ import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload, GameStarting
 
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { GameGuard } from './components/GameGuard';
+import { PlayerGuard } from './components/PlayerGuard';
 import { PinJoinPage } from './lobby/PinJoinPage';
 
 import { PinEntry } from './lobby/PinEntry';
@@ -26,6 +27,11 @@ import { MuteButton } from './audio/MuteButton';
 import { useGameStore } from './stores/gameStore';
 import { useAudioStore } from './stores/audioStore';
 import { useManagerStore } from './stores/managerStore';
+import { usePlayerStore } from './stores/playerStore';
+import { PlayerLogin } from './player/PlayerLogin';
+import { PlayerDashboard } from './player/PlayerDashboard';
+import { PlayerHistory } from './player/PlayerHistory';
+import { PlayerProfile } from './player/PlayerProfile';
 import { useSocket } from './hooks/useSocket';
 import { socket } from './ws/socket';
 import { EVENTS } from '@safety-board/shared';
@@ -83,6 +89,7 @@ function PinEntryPage() {
         onJoin={handleJoin}
         error={roomError}
         onPinChange={() => setRoomError(undefined)}
+        onPlayerLogin={() => navigate('/jogador')}
       />
     </>
   );
@@ -116,12 +123,21 @@ function CharacterSelectPage() {
     navigate('/lobby');
   }, [navigate, session?.id, myPlayerId, setPendingPlayer]);
 
+  const playerName = usePlayerStore((s) => s.name);
+  const [playerFirst, playerLast] = playerName
+    ? [playerName.split(' ')[0], playerName.split(' ').slice(1).join(' ')]
+    : ['', ''];
+
   return (
     <>
       <div className="fixed top-6 right-8 z-50">
         <MuteButton />
       </div>
-      <CharacterSelect onConfirm={handleConfirm} />
+      <CharacterSelect
+        onConfirm={handleConfirm}
+        initialFirstName={playerFirst}
+        initialLastName={playerLast}
+      />
     </>
   );
 }
@@ -257,12 +273,20 @@ function PodiumPage() {
 }
 
 function IndividualResultPage() {
+  const navigate = useNavigate();
   const gameResult = useGameStore((s) => s.gameResult);
   const myPlayerId = useGameStore((s) => s.myPlayerId);
+  const isAuthenticated = usePlayerStore((s) => s.isAuthenticated);
 
   const player = gameResult?.players.find((p) => p.playerId === myPlayerId) ?? DEFAULT_PLAYER;
 
-  return <IndividualCard player={player} />;
+  return (
+    <IndividualCard
+      player={player}
+      onViewDashboard={isAuthenticated() ? () => navigate('/jogador/dashboard') : undefined}
+      onRegister={isAuthenticated() ? undefined : () => navigate('/cadastrar')}
+    />
+  );
 }
 
 function PlayerSignupPage() {
@@ -301,9 +325,13 @@ function PlayerSignupPage() {
 }
 
 function GlobalLeaderboardPage() {
+  const navigate = useNavigate();
   const myPlayerId = useGameStore((s) => s.myPlayerId);
   const entries = useGameStore((s) => s.leaderboardEntries);
   const setLeaderboardEntries = useGameStore((s) => s.setLeaderboardEntries);
+  const playerName = usePlayerStore((s) => s.name);
+  const clearPlayer = usePlayerStore((s) => s.clearPlayer);
+  const playerToken = usePlayerStore((s) => s.token);
 
   useEffect(() => {
     fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/leaderboard`)
@@ -316,6 +344,11 @@ function GlobalLeaderboardPage() {
     <GlobalLeaderboard
       entries={entries}
       currentPlayerId={myPlayerId ?? undefined}
+      playerName={playerToken && playerName ? playerName : undefined}
+      onViewDashboard={() => navigate('/jogador/dashboard')}
+      onViewHistory={() => navigate('/jogador/historico')}
+      onEditProfile={() => navigate('/jogador/perfil')}
+      onLogout={playerToken ? () => { clearPlayer(); navigate('/jogador'); } : undefined}
     />
   );
 }
@@ -417,6 +450,155 @@ function NewSessionFormPage() {
   );
 }
 
+// ─── Player pages ────────────────────────────────────────────────────────────
+
+const SERVER = () => import.meta.env.VITE_SERVER_URL ?? '';
+
+function PlayerLoginPage() {
+  const navigate = useNavigate();
+  const setPlayer = usePlayerStore((s) => s.setPlayer);
+  const [error, setError] = useState<string | undefined>();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleLogin = useCallback(async ({ email, password }: { email: string; password: string }) => {
+    setIsLoading(true);
+    setError(undefined);
+    try {
+      const res = await fetch(`${SERVER()}/api/players/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) { setError('Credenciais inválidas.'); return; }
+      const data = await res.json();
+      setPlayer(data);
+      navigate('/jogador/dashboard');
+    } catch {
+      setError('Não foi possível conectar ao servidor.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [navigate, setPlayer]);
+
+  return <PlayerLogin onLogin={handleLogin} error={error} isLoading={isLoading} />;
+}
+
+function PlayerDashboardPage() {
+  const navigate = useNavigate();
+  const playerStore = usePlayerStore();
+  const clearPlayer = usePlayerStore((s) => s.clearPlayer);
+  const setMyPlayerId = useGameStore((s) => s.setMyPlayerId);
+  const setSession = useGameStore((s) => s.setSession);
+  const [pinError, setPinError] = useState<string | undefined>();
+
+  const handleJoinPin = useCallback((pin: string) => {
+    setPinError(undefined);
+    socket.emit(EVENTS.ROOM_JOIN, { pin, playerName: playerStore.name ?? 'Jogador' });
+
+    function onJoined({ playerId }: RoomJoinedPayload) {
+      setMyPlayerId(playerId);
+      socket.off(EVENTS.ROOM_ERROR, onError);
+    }
+    function onState(session: Parameters<typeof setSession>[0]) {
+      setSession(session);
+      navigate('/personagem');
+      socket.off(EVENTS.ROOM_ERROR, onError);
+    }
+    function onError(payload: RoomErrorPayload) {
+      setPinError(ROOM_ERROR_MESSAGES[payload.code] ?? 'Erro ao entrar na sala.');
+      socket.off(EVENTS.ROOM_JOINED, onJoined);
+      socket.off(EVENTS.GAME_STATE, onState);
+    }
+
+    socket.once(EVENTS.ROOM_JOINED, onJoined);
+    socket.once(EVENTS.GAME_STATE, onState);
+    socket.once(EVENTS.ROOM_ERROR, onError);
+  }, [navigate, playerStore.name, setMyPlayerId, setSession]);
+
+  if (!playerStore.name) return null;
+
+  return (
+    <PlayerDashboard
+      name={playerStore.name}
+      email={playerStore.email ?? ''}
+      industrialUnit={playerStore.industrialUnit ?? ''}
+      totalScore={playerStore.totalScore}
+      gameCount={0}
+      onViewHistory={() => navigate('/jogador/historico')}
+      onViewRanking={() => navigate('/ranking')}
+      onEditProfile={() => navigate('/jogador/perfil')}
+      onLogout={() => { clearPlayer(); navigate('/jogador'); }}
+      onJoinPin={handleJoinPin}
+    />
+  );
+}
+
+function PlayerHistoryPage() {
+  const navigate = useNavigate();
+  const [entries, setEntries] = useState<{ sessionId: string; sessionName: string; playedAt: string; score: number; rank: number; totalPlayers: number }[]>([]);
+  const playerId = usePlayerStore((s) => s.playerId);
+  const token = usePlayerStore((s) => s.token);
+
+  useEffect(() => {
+    if (!playerId || !token) return;
+    fetch(`${SERVER()}/api/players/${playerId}/history`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then(setEntries)
+      .catch(() => {});
+  }, [playerId, token]);
+
+  return <PlayerHistory entries={entries} onBack={() => navigate('/jogador/dashboard')} />;
+}
+
+function PlayerProfilePage() {
+  const navigate = useNavigate();
+  const token = usePlayerStore((s) => s.token);
+  const playerStore = usePlayerStore();
+  const [error, setError] = useState<string | undefined>();
+  const [success, setSuccess] = useState<string | undefined>();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSave = useCallback(async (data: { firstName: string; lastName: string; currentPassword?: string; newPassword?: string }) => {
+    setIsLoading(true);
+    setError(undefined);
+    setSuccess(undefined);
+    try {
+      const res = await fetch(`${SERVER()}/api/players/me`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(data),
+      });
+      if (res.status === 401) { setError('Senha atual incorreta.'); return; }
+      if (!res.ok) { setError('Erro ao atualizar perfil.'); return; }
+      const updated = await res.json();
+      usePlayerStore.setState({ name: updated.name });
+      setSuccess('Perfil atualizado com sucesso.');
+    } catch {
+      setError('Não foi possível conectar ao servidor.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  const [first, ...rest] = (playerStore.name ?? ' ').split(' ');
+  const last = rest.join(' ');
+
+  return (
+    <PlayerProfile
+      firstName={first}
+      lastName={last}
+      email={playerStore.email ?? undefined}
+      onSave={handleSave}
+      onBack={() => navigate('/jogador/dashboard')}
+      error={error}
+      success={success}
+      isLoading={isLoading}
+    />
+  );
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 export function AppRouter() {
@@ -441,6 +623,12 @@ export function AppRouter() {
       {/* Área do manager — requer JWT */}
       <Route path="/manager/dashboard"   element={<ProtectedRoute><ManagerDashboardPage /></ProtectedRoute>} />
       <Route path="/manager/nova-sessao" element={<ProtectedRoute><NewSessionFormPage /></ProtectedRoute>} />
+
+      {/* Área do jogador */}
+      <Route path="/jogador"              element={<PlayerLoginPage />} />
+      <Route path="/jogador/dashboard"    element={<PlayerGuard><PlayerDashboardPage /></PlayerGuard>} />
+      <Route path="/jogador/historico"    element={<PlayerGuard><PlayerHistoryPage /></PlayerGuard>} />
+      <Route path="/jogador/perfil"       element={<PlayerGuard><PlayerProfilePage /></PlayerGuard>} />
     </Routes>
   );
 }

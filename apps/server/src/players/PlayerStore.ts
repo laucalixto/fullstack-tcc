@@ -20,9 +20,19 @@ export interface LeaderboardEntry {
   totalScore: number;
 }
 
+export interface GameHistoryEntry {
+  sessionId: string;
+  sessionName: string;
+  playedAt: string;
+  score: number;
+  rank: number;
+  totalPlayers: number;
+}
+
 export class PlayerStore {
   private readonly byEmail = new Map<string, PlayerRecord>();
   private readonly byId = new Map<string, PlayerRecord>();
+  private readonly history = new Map<string, GameHistoryEntry[]>();
 
   private isConnected(): boolean {
     return mongoose.connection.readyState === 1;
@@ -76,6 +86,35 @@ export class PlayerStore {
     }
   }
 
+  findById(playerId: string): PlayerRecord | null {
+    return this.byId.get(playerId) ?? null;
+  }
+
+  async findByIdAsync(playerId: string): Promise<PlayerRecord | null> {
+    const cached = this.byId.get(playerId);
+    if (cached) return cached;
+    if (!this.isConnected()) return null;
+
+    try {
+      const doc = await PlayerModel.findOne({ playerId });
+      if (!doc) return null;
+      const record: PlayerRecord = {
+        playerId: doc.playerId,
+        firstName: doc.firstName,
+        lastName: doc.lastName,
+        email: doc.email,
+        industrialUnit: doc.industrialUnit,
+        passwordHash: doc.passwordHash,
+        totalScore: doc.totalScore,
+      };
+      this.byEmail.set(record.email, record);
+      this.byId.set(record.playerId, record);
+      return record;
+    } catch {
+      return null;
+    }
+  }
+
   create(data: Omit<PlayerRecord, 'playerId'>): PlayerRecord {
     const record: PlayerRecord = { 
       playerId: randomUUID(), 
@@ -112,6 +151,23 @@ export class PlayerStore {
     }
 
     return this.create({ ...data, email } as Omit<PlayerRecord, 'playerId'>);
+  }
+
+  update(playerId: string, patch: Partial<Omit<PlayerRecord, 'playerId' | 'email'>>): PlayerRecord | null {
+    const record = this.byId.get(playerId);
+    if (!record) return null;
+    Object.assign(record, patch);
+    return record;
+  }
+
+  addGameResult(playerId: string, entry: GameHistoryEntry): void {
+    const list = this.history.get(playerId) ?? [];
+    list.unshift(entry);
+    this.history.set(playerId, list);
+  }
+
+  getHistory(playerId: string): GameHistoryEntry[] {
+    return this.history.get(playerId) ?? [];
   }
 
   async leaderboard(): Promise<LeaderboardEntry[]> {

@@ -76,11 +76,11 @@ describe('GET /api/manager/stats', () => {
 
     await request(app2).post('/api/players/register').send({
       firstName: 'A', lastName: 'B', email: 'a@b.com',
-      industrialUnit: 'u1', password: 'p1',
+      industrialUnit: 'u1', password: 'Senha@111',
     });
     await request(app2).post('/api/players/register').send({
       firstName: 'C', lastName: 'D', email: 'c@d.com',
-      industrialUnit: 'u2', password: 'p2',
+      industrialUnit: 'u2', password: 'Senha@222',
     });
 
     const res = await request(app2)
