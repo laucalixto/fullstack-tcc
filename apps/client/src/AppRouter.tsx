@@ -1,6 +1,7 @@
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
-import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload, GameStartingPayload, RoomJoinedPayload } from '@safety-board/shared';
+import type { PlayerSignupData, NewSessionConfig, RoomErrorPayload, GameStartingPayload, RoomJoinedPayload, ManagedPlayer, QuizQuestionFull, QuizQuestionPayload, SessionDetail } from '@safety-board/shared';
+import { useParams } from 'react-router-dom';
 
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { GameGuard } from './components/GameGuard';
@@ -20,6 +21,14 @@ import { PlayerSignup } from './results/PlayerSignup';
 import { GlobalLeaderboard } from './results/GlobalLeaderboard';
 import { ManagerLogin } from './manager/ManagerLogin';
 import { ManagerDashboard } from './manager/ManagerDashboard';
+import { ManagerLayout } from './manager/ManagerLayout';
+import { ManagerPlayersPage } from './manager/ManagerPlayersPage';
+import { ManagerSessionsPage } from './manager/ManagerSessionsPage';
+import { ManagerSessionDetailPage } from './manager/ManagerSessionDetailPage';
+import { ManagerReportsPage } from './manager/ManagerReportsPage';
+import { ManagerContentPage } from './manager/ManagerContentPage';
+import { ManagerProfilePage } from './manager/ManagerProfilePage';
+import { ManagerSupportPage } from './manager/ManagerSupportPage';
 import { NewSessionForm } from './manager/NewSessionForm';
 import { audioManager } from './audio/AudioManager';
 import { MuteButton } from './audio/MuteButton';
@@ -383,8 +392,33 @@ function ManagerLoginPage() {
   return <ManagerLogin onLogin={handleLogin} error={error ?? undefined} isLoading={isLoading} />;
 }
 
+function useManagerNav() {
+  const navigate = useNavigate();
+  const clearToken = useManagerStore((s) => s.clearToken);
+  const managerName = useManagerStore((s) => s.managerName ?? 'Gestor SST');
+
+  function onNavigate(page: string) {
+    if (page === 'dashboard') navigate('/manager/dashboard');
+    else if (page === 'sessoes') navigate('/manager/sessoes');
+    else if (page === 'relatorios') navigate('/manager/relatorios');
+    else if (page === 'conteudos') navigate('/manager/conteudos');
+    else if (page === 'jogadores') navigate('/manager/jogadores');
+    else if (page === 'ranking') navigate('/manager/ranking');
+    else if (page === 'perfil') navigate('/manager/perfil');
+    else if (page === 'suporte') navigate('/manager/suporte');
+  }
+
+  function onLogout() {
+    clearToken?.();
+    navigate('/manager');
+  }
+
+  return { managerName, onNavigate, onLogout };
+}
+
 function ManagerDashboardPage() {
   const navigate = useNavigate();
+  const { managerName, onNavigate, onLogout } = useManagerNav();
   const token = useManagerStore((s) => s.token);
   const stats = useManagerStore((s) => s.stats);
   const recentSessions = useManagerStore((s) => s.recentSessions);
@@ -409,15 +443,20 @@ function ManagerDashboardPage() {
   const defaultStats = { totalPlayers: 0, avgScore: 0, completionRate: 0, activeSessions: 0 };
 
   return (
-    <ManagerDashboard
-      stats={stats ?? defaultStats}
-      recentSessions={recentSessions}
-      onNewSession={() => navigate('/manager/nova-sessao')}
-    />
+    <ManagerLayout activePage="dashboard" managerName={managerName} onNavigate={onNavigate} onLogout={onLogout}>
+      <ManagerDashboard
+        stats={stats ?? defaultStats}
+        recentSessions={recentSessions}
+        onNewSession={() => navigate('/manager/nova-sessao')}
+        onNavigateToSessions={() => navigate('/manager/sessoes')}
+        onNavigateToReports={() => navigate('/manager/relatorios')}
+      />
+    </ManagerLayout>
   );
 }
 
 function NewSessionFormPage() {
+  const { managerName, onNavigate, onLogout } = useManagerNav();
   const generatedPin = useManagerStore((s) => s.generatedPin);
   const shareLink = useManagerStore((s) => s.shareLink);
   const isLoading = useManagerStore((s) => s.isLoading);
@@ -430,7 +469,11 @@ function NewSessionFormPage() {
   const handleCreate = useCallback(async (config: NewSessionConfig) => {
     useManagerStore.getState().setLoading(true);
     try {
-      socket.emit(EVENTS.ROOM_CREATE, config);
+      socket.emit(EVENTS.ROOM_CREATE, {
+        facilitatorId: 'manager',
+        maxPlayers: config.maxPlayers,
+        quizConfig: { activeNormIds: ['NR-06', 'NR-10', 'NR-12', 'NR-35'], timeoutSeconds: 30, difficulty: config.difficulty },
+      });
       socket.once(EVENTS.GAME_STATE, (session) => {
         useManagerStore.getState().setNewSession(session.pin, session.shareLink);
         useManagerStore.getState().setLoading(false);
@@ -441,12 +484,319 @@ function NewSessionFormPage() {
   }, []);
 
   return (
-    <NewSessionForm
-      onCreateSession={handleCreate}
-      generatedPin={generatedPin ?? undefined}
-      shareLink={fullShareLink}
-      isLoading={isLoading}
-    />
+    <ManagerLayout activePage="dashboard" managerName={managerName} onNavigate={onNavigate} onLogout={onLogout}>
+      <NewSessionForm
+        onCreateSession={handleCreate}
+        generatedPin={generatedPin ?? undefined}
+        shareLink={fullShareLink}
+        isLoading={isLoading}
+      />
+    </ManagerLayout>
+  );
+}
+
+// ─── Manager sub-pages ───────────────────────────────────────────────────────
+
+function ManagerSessionsListPage() {
+  const { managerName, onNavigate, onLogout } = useManagerNav();
+  const token = useManagerStore((s) => s.token);
+  const navigate = useNavigate();
+  const [sessions, setSessions] = useState<import('@safety-board/shared').SessionSummary[]>([]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/manager/sessions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then((r) => r.json()).then(setSessions).catch(() => {});
+  }, [token]);
+
+  return (
+    <ManagerLayout activePage="sessoes" managerName={managerName} onNavigate={onNavigate} onLogout={onLogout}>
+      <ManagerSessionsPage sessions={sessions} onViewDetail={(id) => navigate(`/manager/sessoes/${id}`)} />
+    </ManagerLayout>
+  );
+}
+
+function ManagerSessionDetailWrapper() {
+  const { id } = useParams<{ id: string }>();
+  const { managerName, onNavigate, onLogout } = useManagerNav();
+  const token = useManagerStore((s) => s.token);
+  const navigate = useNavigate();
+  const [detail, setDetail] = useState<SessionDetail | null>(null);
+
+  useEffect(() => {
+    if (!token || !id) return;
+    fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/manager/sessions/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then((r) => r.json()).then(setDetail).catch(() => {});
+  }, [token, id]);
+
+  return (
+    <ManagerLayout activePage="sessoes" managerName={managerName} onNavigate={onNavigate} onLogout={onLogout}>
+      {detail
+        ? <ManagerSessionDetailPage detail={detail} onBack={() => navigate('/manager/sessoes')} />
+        : <div className="p-12 text-center text-on-surface/40 text-sm">Carregando...</div>
+      }
+    </ManagerLayout>
+  );
+}
+
+function ManagerReportsPageWrapper() {
+  const { managerName, onNavigate, onLogout } = useManagerNav();
+  const token = useManagerStore((s) => s.token);
+  const [isExporting, setIsExporting] = useState(false);
+
+  async function handleExport() {
+    if (!token) return;
+    setIsExporting(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/manager/sessions/export`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'sessions.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* silencioso */ }
+    finally { setIsExporting(false); }
+  }
+
+  return (
+    <ManagerLayout activePage="relatorios" managerName={managerName} onNavigate={onNavigate} onLogout={onLogout}>
+      <ManagerReportsPage onExportCSV={handleExport} isExporting={isExporting} />
+    </ManagerLayout>
+  );
+}
+
+function ManagerContentPageWrapper() {
+  const { managerName, onNavigate, onLogout } = useManagerNav();
+  const token = useManagerStore((s) => s.token);
+  const [norms, setNorms] = useState<Array<{ normId: string; title: string }>>([]);
+  const [questions, setQuestions] = useState<QuizQuestionFull[]>([]);
+  const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? '';
+
+  useEffect(() => {
+    fetch(`${SERVER_URL}/api/questions/norms`).then((r) => r.json()).then(setNorms).catch(() => {});
+    fetch(`${SERVER_URL}/api/questions`).then((r) => r.json()).then(setQuestions).catch(() => {});
+  }, [SERVER_URL]);
+
+  async function handleSave(id: string, patch: QuizQuestionPayload) {
+    if (!token) return;
+    const res = await fetch(`${SERVER_URL}/api/questions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(patch),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...updated } : q)));
+    }
+  }
+
+  async function handleAdd(payload: QuizQuestionPayload) {
+    if (!token) return;
+    const res = await fetch(`${SERVER_URL}/api/questions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const created = await res.json();
+      setQuestions((prev) => [...prev, created]);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!token) return;
+    await fetch(`${SERVER_URL}/api/questions/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setQuestions((prev) => prev.filter((q) => q.id !== id));
+  }
+
+  async function handleAddNorm(normId: string, title: string) {
+    if (!token) return;
+    const res = await fetch(`${SERVER_URL}/api/questions/norms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ normId, title }),
+    });
+    if (res.ok) {
+      const created = await res.json();
+      setNorms((prev) => [...prev, created]);
+    }
+  }
+
+  async function handleDeleteNorm(normId: string) {
+    if (!token) return;
+    const res = await fetch(`${SERVER_URL}/api/questions/norms/${normId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      setNorms((prev) => prev.filter((n) => n.normId !== normId));
+      setQuestions((prev) => prev.filter((q) => q.normId !== normId));
+    }
+  }
+
+  return (
+    <ManagerLayout activePage="conteudos" managerName={managerName} onNavigate={onNavigate} onLogout={onLogout}>
+      {norms.length > 0
+        ? <ManagerContentPage norms={norms} questions={questions} onSaveQuestion={handleSave} onAddQuestion={handleAdd} onDeleteQuestion={handleDelete} onAddNorm={handleAddNorm} onDeleteNorm={handleDeleteNorm} />
+        : <div className="p-12 text-center text-on-surface/40 text-sm">Carregando...</div>
+      }
+    </ManagerLayout>
+  );
+}
+
+function ManagerPlayersPageWrapper() {
+  const { managerName, onNavigate, onLogout } = useManagerNav();
+  const token = useManagerStore((s) => s.token);
+  const [players, setPlayers] = useState<ManagedPlayer[]>([]);
+  const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? '';
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${SERVER_URL}/api/manager/players`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then((r) => r.json()).then(setPlayers).catch(() => {});
+  }, [token, SERVER_URL]);
+
+  async function handleSave(playerId: string, patch: Partial<ManagedPlayer>) {
+    if (!token) return;
+    const res = await fetch(`${SERVER_URL}/api/manager/players/${playerId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(patch),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setPlayers((prev) => prev.map((p) => (p.playerId === playerId ? { ...p, ...updated } : p)));
+    }
+  }
+
+  return (
+    <ManagerLayout activePage="jogadores" managerName={managerName} onNavigate={onNavigate} onLogout={onLogout}>
+      <ManagerPlayersPage players={players} onSave={handleSave} />
+    </ManagerLayout>
+  );
+}
+
+const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
+
+function ManagerRankingPageWrapper() {
+  const { managerName, onNavigate, onLogout } = useManagerNav();
+  const entries = useGameStore((s) => s.leaderboardEntries);
+  const setLeaderboardEntries = useGameStore((s) => s.setLeaderboardEntries);
+
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/leaderboard`)
+      .then((r) => r.json()).then(setLeaderboardEntries).catch(() => {});
+  }, [setLeaderboardEntries]);
+
+  return (
+    <ManagerLayout activePage="ranking" managerName={managerName} onNavigate={onNavigate} onLogout={onLogout}>
+      <div className="px-6 md:px-8 py-8">
+        <div className="mb-8">
+          <h1 className="text-2xl font-extrabold tracking-tight text-on-surface">Ranking Global</h1>
+          <p className="text-on-surface/60 text-sm mt-1">Desempenho de todos os participantes</p>
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low">
+                  {['Posição', 'Colaborador', 'Unidade Industrial', 'Score Total'].map((h) => (
+                    <th key={h} className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.1em] text-on-surface/50">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-container">
+                {entries.map((entry) => (
+                  <tr key={entry.playerId} className="hover:bg-surface-bright transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-black text-on-surface">{String(entry.rank).padStart(2, '0')}</span>
+                        {MEDAL[entry.rank] && <span>{MEDAL[entry.rank]}</span>}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-black">
+                          {entry.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-bold text-on-surface text-sm">{entry.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-1 rounded-full bg-surface-container-high text-on-surface/70 text-[10px] font-bold uppercase tracking-wider">
+                        {entry.industrialUnit}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="text-lg font-black text-on-surface">{entry.totalScore}</span>
+                    </td>
+                  </tr>
+                ))}
+                {entries.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-on-surface/40 text-sm">
+                      Nenhum jogador registrado ainda.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </ManagerLayout>
+  );
+}
+
+function ManagerProfilePageWrapper() {
+  const { managerName, onNavigate, onLogout } = useManagerNav();
+  const token = useManagerStore((s) => s.token);
+  const managerEmail = useManagerStore((s) => s.managerEmail ?? '');
+  const [error, setError] = useState<string | undefined>();
+  const [success, setSuccess] = useState<string | undefined>();
+  const [isLoading, setIsLoading] = useState(false);
+
+  async function handleSave({ name }: { name?: string }) {
+    if (!token || !name) return;
+    setIsLoading(true);
+    try {
+      await fetch(`${import.meta.env.VITE_SERVER_URL ?? ''}/api/auth/me`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name }),
+      });
+      setSuccess('Perfil atualizado com sucesso.');
+      setError(undefined);
+    } catch {
+      setError('Erro ao salvar perfil.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <ManagerLayout activePage="perfil" managerName={managerName} onNavigate={onNavigate} onLogout={onLogout}>
+      <ManagerProfilePage name={managerName} email={managerEmail} onSave={handleSave} isLoading={isLoading} error={error} success={success} />
+    </ManagerLayout>
+  );
+}
+
+function ManagerSupportPageWrapper() {
+  const { managerName, onNavigate, onLogout } = useManagerNav();
+  return (
+    <ManagerLayout activePage="suporte" managerName={managerName} onNavigate={onNavigate} onLogout={onLogout}>
+      <ManagerSupportPage />
+    </ManagerLayout>
   );
 }
 
@@ -623,6 +973,14 @@ export function AppRouter() {
       {/* Área do manager — requer JWT */}
       <Route path="/manager/dashboard"   element={<ProtectedRoute><ManagerDashboardPage /></ProtectedRoute>} />
       <Route path="/manager/nova-sessao" element={<ProtectedRoute><NewSessionFormPage /></ProtectedRoute>} />
+      <Route path="/manager/sessoes"     element={<ProtectedRoute><ManagerSessionsListPage /></ProtectedRoute>} />
+      <Route path="/manager/sessoes/:id" element={<ProtectedRoute><ManagerSessionDetailWrapper /></ProtectedRoute>} />
+      <Route path="/manager/relatorios"  element={<ProtectedRoute><ManagerReportsPageWrapper /></ProtectedRoute>} />
+      <Route path="/manager/conteudos"   element={<ProtectedRoute><ManagerContentPageWrapper /></ProtectedRoute>} />
+      <Route path="/manager/jogadores"   element={<ProtectedRoute><ManagerPlayersPageWrapper /></ProtectedRoute>} />
+      <Route path="/manager/ranking"     element={<ProtectedRoute><ManagerRankingPageWrapper /></ProtectedRoute>} />
+      <Route path="/manager/perfil"      element={<ProtectedRoute><ManagerProfilePageWrapper /></ProtectedRoute>} />
+      <Route path="/manager/suporte"     element={<ProtectedRoute><ManagerSupportPageWrapper /></ProtectedRoute>} />
 
       {/* Área do jogador */}
       <Route path="/jogador"              element={<PlayerLoginPage />} />

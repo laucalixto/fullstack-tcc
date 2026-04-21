@@ -5,7 +5,7 @@ import { DiceService } from '../engine/DiceService.js';
 import { PINGenerator } from '../session/PINGenerator.js';
 import { QuizService, type ServedQuestion, type QuizCheckResult } from './QuizService.js';
 import { EVENTS, isQuizTile, getNormForTile, isTileEffect, TILE_EFFECTS } from '@safety-board/shared';
-import type { GameSession, Player, QuizConfig, GameResultPayload, GameResultPlayer, TileEffectDefinition } from '@safety-board/shared';
+import type { GameSession, Player, QuizConfig, GameResultPayload, GameResultPlayer, TileEffectDefinition, QuizLogEntry, TileLogEntry } from '@safety-board/shared';
 
 const DEFAULT_MAX_PLAYERS = 4;
 
@@ -34,6 +34,7 @@ interface SessionEntry {
   usedQuestionIds: Set<string>;
   pendingQuiz: PendingQuiz | null;
   startedAt: number | null;
+  finishedAt: number | null;
   correctAnswersByPlayer: Map<string, number>;
   totalAnswersByPlayer: Map<string, number>;
   lobbyReadyPlayers: Set<string>;
@@ -41,6 +42,9 @@ interface SessionEntry {
   finishCandidateId: string | null;
   finishRoundLastPlayerIndex: number | null;
   pendingTileEffect: PendingTileEffect | null;
+  quizLog: QuizLogEntry[];
+  tileLog: TileLogEntry[];
+  droppedPlayerIds: Set<string>;
 }
 
 interface SessionManagerConfig {
@@ -88,6 +92,7 @@ export class SessionManager {
       quizConfig: {
         activeNormIds: quizConfig?.activeNormIds ?? DEFAULT_QUIZ_CONFIG.activeNormIds,
         timeoutSeconds: quizConfig?.timeoutSeconds ?? DEFAULT_QUIZ_CONFIG.timeoutSeconds,
+        difficulty: quizConfig?.difficulty,
       },
       maxPlayers,
       lobbyReadyPlayers: [],
@@ -100,6 +105,7 @@ export class SessionManager {
       usedQuestionIds: new Set(),
       pendingQuiz: null,
       startedAt: null,
+      finishedAt: null,
       correctAnswersByPlayer: new Map(),
       totalAnswersByPlayer: new Map(),
       lobbyReadyPlayers: new Set(),
@@ -107,6 +113,9 @@ export class SessionManager {
       finishCandidateId: null,
       finishRoundLastPlayerIndex: null,
       pendingTileEffect: null,
+      quizLog: [],
+      tileLog: [],
+      droppedPlayerIds: new Set(),
     });
     this.pinToId.set(pin, id);
     return session;
@@ -215,7 +224,7 @@ export class SessionManager {
     if (isQuizTile(player.position)) {
       const normId = getNormForTile(player.position, session.quizConfig.activeNormIds);
       try {
-        const question = this.quizService.getRandomQuestion(normId, entry.usedQuestionIds);
+        const question = this.quizService.getRandomQuestion(normId, entry.usedQuestionIds, session.quizConfig.difficulty);
         const served = this.quizService.serveQuestion(question.id);
         if (served) {
           entry.pendingQuiz = { playerId, questionId: question.id, nextPlayerId, servedAt: this.nowFn() };
@@ -239,6 +248,7 @@ export class SessionManager {
 
     const player = session.players.find((p) => p.id === playerId)!;
     const { effect, nextPlayerId } = pendingTileEffect;
+    const tileIndex = player.position;
     entry.pendingTileEffect = null;
 
     if (effect.backToStart) {
@@ -252,6 +262,16 @@ export class SessionManager {
     if (effect.skipTurns > 0) {
       player.skipNextTurn = true;
     }
+
+    entry.tileLog.push({
+      playerId,
+      playerName: player.name,
+      tileIndex,
+      effectTitle: effect.title,
+      effectType: effect.type,
+      deltaScore: effect.deltaScore,
+      deltaPosition: effect.backToStart ? -tileIndex : effect.deltaPosition,
+    });
 
     return { nextPlayerId };
   }
@@ -290,6 +310,18 @@ export class SessionManager {
       entry.correctAnswersByPlayer.set(playerId, prevCorrect + 1);
     }
 
+    const question = this.quizService.getQuestion(questionId);
+    entry.quizLog.push({
+      playerId,
+      playerName: player?.name ?? '',
+      questionId,
+      questionText: question?.text ?? '',
+      selectedText,
+      correctText: result.correctText,
+      correct: result.correct,
+      latencyMs,
+    });
+
     return { result, nextPlayerId: pendingQuiz.nextPlayerId };
   }
 
@@ -309,9 +341,10 @@ export class SessionManager {
     const { session, fsm } = entry;
     fsm.dispatch(EVENTS.GAME_FINISHED);
     session.state = fsm.state;
+    entry.finishedAt = Date.now();
 
     const durationSeconds = entry.startedAt
-      ? Math.round((Date.now() - entry.startedAt) / 1000)
+      ? Math.round((entry.finishedAt - entry.startedAt) / 1000)
       : 0;
 
     const sorted = [...session.players].sort((a, b) => b.score - a.score);
@@ -360,6 +393,8 @@ export class SessionManager {
     const player = session.players.find((p) => p.id === playerId);
     if (player) player.isConnected = false;
 
+    entry.droppedPlayerIds.add(playerId);
+
     const currentPlayer = session.players[session.currentPlayerIndex];
     if (currentPlayer.id === playerId && turnManager) {
       const nextPlayerId = turnManager.next();
@@ -377,10 +412,21 @@ export class SessionManager {
     return entry.gameReadyPlayers.size >= entry.session.players.length;
   }
 
-  allSessions(): Array<{ session: GameSession; startedAt: number | null }> {
+  allSessions(): Array<{
+    session: GameSession;
+    startedAt: number | null;
+    finishedAt: number | null;
+    quizLog: QuizLogEntry[];
+    tileLog: TileLogEntry[];
+    droppedPlayerIds: string[];
+  }> {
     return [...this.sessions.values()].map((e) => ({
       session: e.session,
       startedAt: e.startedAt,
+      finishedAt: e.finishedAt,
+      quizLog: e.quizLog,
+      tileLog: e.tileLog,
+      droppedPlayerIds: [...e.droppedPlayerIds],
     }));
   }
 }

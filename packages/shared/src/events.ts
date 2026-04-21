@@ -55,6 +55,7 @@ export interface RoomCreatePayload {
   quizConfig?: {
     activeNormIds: string[];
     timeoutSeconds?: number;
+    difficulty?: 'basic' | 'intermediate' | 'advanced';
   };
 }
 

@@ -10,6 +10,7 @@ export interface PlayerRecord {
   industrialUnit: string;
   passwordHash: string;
   totalScore: number;
+  createdAt?: number;
 }
 
 export interface LeaderboardEntry {
@@ -116,14 +117,19 @@ export class PlayerStore {
   }
 
   create(data: Omit<PlayerRecord, 'playerId'>): PlayerRecord {
-    const record: PlayerRecord = { 
-      playerId: randomUUID(), 
+    const record: PlayerRecord = {
+      playerId: randomUUID(),
       ...data,
-      email: data.email.toLowerCase() 
+      email: data.email.toLowerCase(),
+      createdAt: data.createdAt ?? Date.now(),
     };
     this.byEmail.set(record.email, record);
     this.byId.set(record.playerId, record);
     return record;
+  }
+
+  findAll(): PlayerRecord[] {
+    return [...this.byId.values()];
   }
 
   async createAsync(data: Omit<PlayerRecord, 'playerId'>): Promise<PlayerRecord> {

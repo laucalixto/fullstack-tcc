@@ -60,6 +60,7 @@ export interface Player {
 export interface QuizConfig {
   activeNormIds: string[];  // normas ativas escolhidas pelo facilitador
   timeoutSeconds: number;   // tempo por pergunta (padrão: 30)
+  difficulty?: 'basic' | 'intermediate' | 'advanced'; // filtra questões por dificuldade; null = todas
 }
 
 export interface QuizServedQuestion {
@@ -140,7 +141,8 @@ export interface NewSessionConfig {
 export type SessionStatus = 'active' | 'completed' | 'reviewing';
 
 export interface SessionSummary {
-  id: string;
+  id: string;        // UUID da sessão (session.id)
+  pin: string;       // PIN de 6 dígitos (para exibição)
   date: string;
   group: string;
   avgScore: number | null;
@@ -152,4 +154,77 @@ export interface DashboardStats {
   avgScore: number;
   completionRate: number;
   activeSessions: number;
+}
+
+// ─── Manager extended types ───────────────────────────────────────────────────
+
+export interface ManagedPlayer {
+  playerId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  industrialUnit: string;
+  totalScore: number;
+  gameCount: number;
+  createdAt: string;
+}
+
+export interface QuizLogEntry {
+  playerId: string;
+  playerName: string;
+  questionId: string;
+  questionText: string;
+  selectedText: string;
+  correctText: string;
+  correct: boolean;
+  latencyMs: number;
+}
+
+export interface TileLogEntry {
+  playerId: string;
+  playerName: string;
+  tileIndex: number;
+  effectTitle: string;
+  effectType: string;
+  deltaScore: number;
+  deltaPosition: number;
+}
+
+export interface SessionDetail {
+  sessionId: string;
+  pin: string;
+  sessionName: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationSeconds: number | null;
+  status: 'active' | 'completed';
+  players: Array<{
+    playerId: string;
+    name: string;
+    score: number;
+    rank: number | null;
+    finalPosition: number;
+    correctAnswers: number;
+    totalAnswers: number;
+    dropped: boolean;
+  }>;
+  quizLog: QuizLogEntry[];
+  tileLog: TileLogEntry[];
+}
+
+export interface QuizQuestionFull {
+  id: string;
+  normId: string;
+  text: string;
+  options: string[];
+  correctIndex: number;
+  difficulty: 'basic' | 'intermediate' | 'advanced';
+}
+
+export interface QuizQuestionPayload {
+  normId: string;
+  text: string;
+  options: string[];
+  correctIndex: number;
+  difficulty?: 'basic' | 'intermediate' | 'advanced';
 }

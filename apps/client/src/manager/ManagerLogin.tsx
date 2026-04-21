@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ManagerLoginData } from '@safety-board/shared';
+import { EyeIcon, EyeOffIcon, InfoIcon } from '../components/Icon';
 
 interface ManagerLoginProps {
   onLogin: (data: ManagerLoginData) => void;
@@ -84,9 +85,7 @@ export function ManagerLogin({ onLogin, error, isLoading = false }: ManagerLogin
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40 hover:text-primary transition-colors focus:outline-none"
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                 >
-                  <span className="material-symbols-outlined text-lg">
-                    {showPassword ? 'visibility' : 'visibility_off'}
-                  </span>
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
             </div>
@@ -133,7 +132,7 @@ export function ManagerLogin({ onLogin, error, isLoading = false }: ManagerLogin
 
         {/* System status */}
         <div className="mt-8 flex items-center gap-4 p-4 bg-surface-container-low rounded-lg border-l-4 border-secondary/30">
-          <span className="material-symbols-outlined text-secondary text-lg">info</span>
+          <InfoIcon className="w-4 h-4 text-secondary" />
           <p className="text-[10px] uppercase tracking-tight font-medium text-on-surface/60">
             Sistema monitorado conforme protocolos de segurança NR-01. Mantenha suas credenciais protegidas.
           </p>

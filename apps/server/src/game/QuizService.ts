@@ -6,6 +6,7 @@ export interface QuizQuestion {
   text: string;
   options: string[];
   correctIndex: number;
+  difficulty?: 'basic' | 'intermediate' | 'advanced'; // undefined = qualquer dificuldade
 }
 
 export interface Norm {
@@ -287,14 +288,21 @@ export class QuizService {
     return this.questions.get(id);
   }
 
-  getRandomQuestion(normId?: string, exclude: Set<string> = new Set()): QuizQuestion {
-    const pool = normId
-      ? this.getQuestionsByNorm(normId).filter((q) => !exclude.has(q.id))
-      : this.getAllQuestions().filter((q) => !exclude.has(q.id));
+  getRandomQuestion(normId?: string, exclude: Set<string> = new Set(), difficulty?: 'basic' | 'intermediate' | 'advanced'): QuizQuestion {
+    const base = normId
+      ? this.getQuestionsByNorm(normId)
+      : this.getAllQuestions();
+
+    const pool = base.filter((q) => {
+      if (exclude.has(q.id)) return false;
+      // Questão sem dificuldade entra em qualquer pool; com dificuldade, só entra se coincidir
+      if (difficulty && q.difficulty && q.difficulty !== difficulty) return false;
+      return true;
+    });
 
     if (pool.length === 0) {
       throw new Error(
-        `QuizService: nenhuma questão disponível${normId ? ` para ${normId}` : ''} após aplicar exclusões`,
+        `QuizService: nenhuma questão disponível${normId ? ` para ${normId}` : ''}${difficulty ? ` com dificuldade ${difficulty}` : ''} após aplicar exclusões`,
       );
     }
 

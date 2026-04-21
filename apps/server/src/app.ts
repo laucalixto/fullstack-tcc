@@ -8,6 +8,7 @@ import { PlayerStore } from './players/PlayerStore.js';
 import { createPlayerRouter } from './players/player.router.js';
 import { SessionManager } from './game/SessionManager.js';
 import { createManagerRouter } from './manager/manager.router.js';
+import { createQuestionsRouter } from './questions/questions.router.js';
 
 const isTest = process.env.NODE_ENV === 'test' || !!process.env.VITEST;
 
@@ -56,6 +57,7 @@ export function createApp(options: AppOptions = {}): Express {
 
   const sessionManager = options.sessionManager ?? new SessionManager();
   app.use('/api/manager', createManagerRouter(playerStore, sessionManager));
+  app.use('/api/questions', createQuestionsRouter());
 
   return app;
 }

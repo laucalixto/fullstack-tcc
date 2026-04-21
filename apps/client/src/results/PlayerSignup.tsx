@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { PlayerSignupData } from '@safety-board/shared';
+import { EyeIcon, EyeOffIcon } from '../components/Icon';
 
 const INDUSTRIAL_UNITS = [
   { value: 'unidade-sp', label: 'Unidade Central - SP' },
@@ -174,9 +175,7 @@ export function PlayerSignup({ onSignup, error, isLoading = false }: PlayerSignu
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 hover:text-primary transition-colors focus:outline-none"
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                 >
-                  <span className="material-symbols-outlined text-lg">
-                    {showPassword ? 'visibility' : 'visibility_off'}
-                  </span>
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
               <p className="mt-2 text-[10px] text-on-surface-variant/60">

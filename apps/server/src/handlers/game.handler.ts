@@ -65,13 +65,23 @@ export function registerGameHandler(socket: Socket, io: Server, sm: SessionManag
 
           // Persiste resultado no MongoDB (fire-and-forget — não bloqueia o fluxo)
           const sessionData = sm.getById(payload.sessionId);
-          if (sessionData) {
+          const sessionEntry = sm.allSessions().find((s) => s.session.id === payload.sessionId);
+          if (sessionData && sessionEntry) {
+            const playersWithDropped = gameResult.players.map((p) => ({
+              ...p,
+              dropped: sessionEntry.droppedPlayerIds.includes(p.playerId),
+            }));
             GameResultModel.create({
               sessionId: payload.sessionId,
               pin: sessionData.pin,
               sessionName: sessionData.name,
-              players: gameResult.players,
+              players: playersWithDropped,
+              quizLog: sessionEntry.quizLog,
+              tileLog: sessionEntry.tileLog,
+              droppedPlayerIds: sessionEntry.droppedPlayerIds,
               durationSeconds: gameResult.durationSeconds,
+              startedAt: sessionEntry.startedAt ? new Date(sessionEntry.startedAt) : undefined,
+              finishedAt: sessionEntry.finishedAt ? new Date(sessionEntry.finishedAt) : undefined,
               playedAt: new Date(),
             }).catch((err) => console.error('[db] GameResult save failed:', err));
           }

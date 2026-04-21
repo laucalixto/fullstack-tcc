@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { EyeIcon, EyeOffIcon } from '../components/Icon';
 
 interface PlayerLoginProps {
   onLogin: (data: { email: string; password: string }) => void;
@@ -89,9 +90,7 @@ export function PlayerLogin({ onLogin, error, isLoading = false }: PlayerLoginPr
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 hover:text-primary transition-colors focus:outline-none"
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                 >
-                  <span className="material-symbols-outlined text-lg">
-                    {showPassword ? 'visibility' : 'visibility_off'}
-                  </span>
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
             </div>

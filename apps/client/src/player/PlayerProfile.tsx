@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { EyeIcon, EyeOffIcon } from '../components/Icon';
 
 interface PlayerProfileProps {
   firstName: string;
@@ -123,9 +124,7 @@ export function PlayerProfile({
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 hover:text-primary transition-colors focus:outline-none"
                     aria-label={showCurrent ? 'Ocultar senha' : 'Mostrar senha'}
                   >
-                    <span className="material-symbols-outlined text-lg">
-                      {showCurrent ? 'visibility' : 'visibility_off'}
-                    </span>
+                    {showCurrent ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
                 </div>
               </div>
@@ -148,9 +147,7 @@ export function PlayerProfile({
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 hover:text-primary transition-colors focus:outline-none"
                     aria-label={showNew ? 'Ocultar senha' : 'Mostrar senha'}
                   >
-                    <span className="material-symbols-outlined text-lg">
-                      {showNew ? 'visibility' : 'visibility_off'}
-                    </span>
+                    {showNew ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
                 </div>
               </div>

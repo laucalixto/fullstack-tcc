@@ -15,11 +15,12 @@ const makeStats = (): DashboardStats => ({
 const makeSessions = (n: number): SessionSummary[] =>
   Array.from({ length: n }, (_, i) => ({
     id: `SST-${900 + i}`,
+    pin: `${100000 + i}`,
     date: '24 Out, 14:30',
     group: `Grupo ${i + 1}`,
     avgScore: i % 3 === 0 ? null : 80 + i,
     status: i % 3 === 0 ? 'active' : i % 3 === 1 ? 'completed' : 'reviewing',
-  }));
+  } as SessionSummary));
 
 describe('ManagerDashboard', () => {
   it('exibe o total de jogadores', () => {
@@ -68,5 +69,19 @@ describe('ManagerDashboard', () => {
   it('renderiza lista de sessões vazia sem erros', () => {
     render(<ManagerDashboard stats={makeStats()} recentSessions={[]} onNewSession={vi.fn()} />);
     expect(screen.queryAllByTestId(/^dashboard-session-/)).toHaveLength(0);
+  });
+
+  it('botão Exportar Relatórios chama onNavigateToReports', () => {
+    const onNavigateToReports = vi.fn();
+    render(<ManagerDashboard stats={makeStats()} recentSessions={[]} onNewSession={vi.fn()} onNavigateToReports={onNavigateToReports} />);
+    screen.getByTestId('dashboard-export-btn').click();
+    expect(onNavigateToReports).toHaveBeenCalled();
+  });
+
+  it('link Ver Histórico chama onNavigateToSessions', () => {
+    const onNavigateToSessions = vi.fn();
+    render(<ManagerDashboard stats={makeStats()} recentSessions={makeSessions(1)} onNewSession={vi.fn()} onNavigateToSessions={onNavigateToSessions} />);
+    screen.getByTestId('dashboard-history-link').click();
+    expect(onNavigateToSessions).toHaveBeenCalled();
   });
 });
