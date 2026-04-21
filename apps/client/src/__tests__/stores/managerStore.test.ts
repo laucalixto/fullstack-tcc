@@ -42,8 +42,8 @@ describe('managerStore', () => {
 
   it('setRecentSessions armazena sessões recentes', () => {
     const sessions: SessionSummary[] = [
-      { id: 's1', date: '2026-04-01', group: 'Turma A', avgScore: 80, status: 'completed' },
-      { id: 's2', date: '2026-04-10', group: 'Turma B', avgScore: null, status: 'active' },
+      { id: 's1', pin: '111111', date: '2026-04-01', group: 'Turma A', avgScore: 80, status: 'completed' },
+      { id: 's2', pin: '222222', date: '2026-04-10', group: 'Turma B', avgScore: null, status: 'active' },
     ];
     useManagerStore.getState().setRecentSessions(sessions);
 
@@ -53,7 +53,7 @@ describe('managerStore', () => {
 
   it('setRecentSessions sobrescreve lista anterior', () => {
     const s1: SessionSummary[] = [
-      { id: 's1', date: '2026-04-01', group: 'Turma A', avgScore: 80, status: 'completed' },
+      { id: 's1', pin: '111111', date: '2026-04-01', group: 'Turma A', avgScore: 80, status: 'completed' },
     ];
     useManagerStore.getState().setRecentSessions(s1);
     useManagerStore.getState().setRecentSessions([]);
@@ -91,7 +91,7 @@ describe('managerStore', () => {
     useManagerStore.setState({
       token: 'jwt-xyz',
       stats: { totalPlayers: 10, avgScore: 60, completionRate: 0.5, activeSessions: 1 },
-      recentSessions: [{ id: 's1', date: '2026-04-01', group: 'G', avgScore: null, status: 'completed' }],
+      recentSessions: [{ id: 's1', pin: '111111', date: '2026-04-01', group: 'G', avgScore: null, status: 'completed' }],
       generatedPin: '999888',
       shareLink: 'https://example.com/join/999888',
     });
