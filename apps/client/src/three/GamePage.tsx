@@ -204,6 +204,7 @@ export function GamePage() {
         if (wasPending) {
           const finishTile = BOARD_PATH[BOARD_PATH.length - 1];
           gameBus.emit('camera:victory', { position: finishTile });
+          audioManager.startVictoryTrack();
           setTimeout(() => navigate('/podio'), 3500);
         }
         return false;
@@ -238,6 +239,8 @@ export function GamePage() {
 
   const handleRollDice = useCallback(() => {
     if (!session || !myPlayerId || isDiceRolling || isPawnSettling || quizPayload || effectCardPayload) return;
+    audioManager.playDiceClick();
+    audioManager.playDiceRoll();
     setIsDiceRolling(true);
     socket.emit(EVENTS.TURN_ROLL, { sessionId: session.id, playerId: myPlayerId });
     gameBus.emit('dice:throw', { position: DICE_ZONE });
@@ -281,6 +284,7 @@ export function GamePage() {
       setVictoryPending(false);
       const finishTile = BOARD_PATH[BOARD_PATH.length - 1];
       gameBus.emit('camera:victory', { position: finishTile });
+      audioManager.startVictoryTrack();
       setTimeout(() => navigate('/podio'), 3500);
     }, 3000);
     return () => clearTimeout(timer);

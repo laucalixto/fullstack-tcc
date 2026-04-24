@@ -139,4 +139,72 @@ describe('AudioManager', () => {
     mgr.syncMuted(false);
     expect(mgr.isMuted()).toBe(false);
   });
+
+  // ─── SFX do dado ─────────────────────────────────────────────────────────────
+
+  it('playDiceClick instancia Howl com o SFX de clique do dado (sem loop)', () => {
+    mgr.playDiceClick();
+    expect(Howl).toHaveBeenCalledWith(expect.objectContaining({
+      src: ['/audio/sfx-dice-click.mp3'],
+      loop: false,
+    }));
+  });
+
+  it('playDiceClick não reproduz quando muted', () => {
+    mgr.setMuted(true);
+    mgr.playDiceClick();
+    const instance = vi.mocked(Howl).mock.results[0].value;
+    expect(instance.play).not.toHaveBeenCalled();
+  });
+
+  it('playDiceRoll instancia Howl com o SFX de rolagem do dado', () => {
+    mgr.playDiceRoll();
+    expect(Howl).toHaveBeenCalledWith(expect.objectContaining({
+      src: ['/audio/sfx-dice-roll.mp3'],
+      loop: false,
+    }));
+  });
+
+  it('playDiceRoll substitui instância anterior (unload)', () => {
+    mgr.playDiceRoll();
+    const first = vi.mocked(Howl).mock.results[0].value;
+    mgr.playDiceRoll();
+    expect(first.unload).toHaveBeenCalled();
+  });
+
+  // ─── Trilha de vitória ───────────────────────────────────────────────────────
+
+  it('startVictoryTrack instancia Howl com a trilha de vitória em loop', () => {
+    mgr.startVictoryTrack();
+    expect(Howl).toHaveBeenCalledWith(expect.objectContaining({
+      src: ['/audio/track-victory.mp3'],
+      loop: true,
+    }));
+  });
+
+  it('startVictoryTrack para trilha do tabuleiro antes de tocar', () => {
+    mgr.startBoardTrack();
+    const board = vi.mocked(Howl).mock.results[0].value;
+    mgr.startVictoryTrack();
+    expect(board.unload).toHaveBeenCalled();
+  });
+
+  it('stopVictoryTrack chama unload após o fade terminar', () => {
+    mgr.startVictoryTrack();
+    const instance = vi.mocked(Howl).mock.results[0].value;
+    mgr.stopVictoryTrack();
+    vi.runAllTimers();
+    expect(instance.unload).toHaveBeenCalled();
+  });
+
+  it('startVictoryTrack não reproduz quando muted', () => {
+    mgr.setMuted(true);
+    mgr.startVictoryTrack();
+    const instance = vi.mocked(Howl).mock.results[0].value;
+    expect(instance.play).not.toHaveBeenCalled();
+  });
+
+  it('stopVictoryTrack é no-op quando não iniciado', () => {
+    expect(() => mgr.stopVictoryTrack()).not.toThrow();
+  });
 });

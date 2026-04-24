@@ -63,7 +63,6 @@ function PinEntryPage() {
 
   useEffect(() => {
     audioManager.syncMuted(useAudioStore.getState().muted);
-    audioManager.startLobbyTrack();
   }, []);
 
   const handleJoin = useCallback((pin: string) => {
@@ -172,6 +171,12 @@ function LobbyWaitingPage() {
   const [autoStartAt, setAutoStartAt] = useState<number | undefined>();
   const [forceStartVotes, setForceStartVotes] = useState<number | undefined>();
   const [forceStartNeeded, setForceStartNeeded] = useState<number | undefined>();
+
+  // Trilha do lobby só aqui — ao sair do lobby (tutorial ou dropado), para.
+  useEffect(() => {
+    audioManager.startLobbyTrack();
+    return () => { audioManager.stopLobbyTrack(); };
+  }, []);
 
   const pin         = session?.pin ?? '------';
   const sessionName = session?.name;
@@ -305,6 +310,12 @@ function PodiumPage() {
   const navigate = useNavigate();
   const gameResult = useGameStore((s) => s.gameResult);
   const myPlayerId = useGameStore((s) => s.myPlayerId);
+
+  // Trilha de vitória iniciada no GamePage (camera:victory) persiste aqui;
+  // encerra ao sair do pódio (navegação para /resultado, /jogador etc).
+  useEffect(() => {
+    return () => { audioManager.stopVictoryTrack(); };
+  }, []);
 
   return (
     <PodiumResults

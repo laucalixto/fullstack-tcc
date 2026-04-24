@@ -1,8 +1,11 @@
 import { Howl, Howler } from 'howler';
 import type { CardCategory } from './cardAudioCategory.js';
 
-const BOARD_TRACK  = '/audio/track-board.mp3';
-const LOBBY_TRACK  = '/audio/track-lobby.mp3';
+const BOARD_TRACK    = '/audio/track-board.mp3';
+const LOBBY_TRACK    = '/audio/track-lobby.mp3';
+const VICTORY_TRACK  = '/audio/track-victory.mp3';
+const DICE_CLICK_SFX = '/audio/sfx-dice-click.mp3';
+const DICE_ROLL_SFX  = '/audio/sfx-dice-roll.mp3';
 
 const STINGERS: Record<CardCategory, string> = {
   accident:   '/audio/stinger-accident.mp3',
@@ -18,7 +21,9 @@ const FADE_MS           = 500;
 export class AudioManager {
   private boardTrack:    Howl | null = null;
   private lobbyTrack:    Howl | null = null;
+  private victoryTrack:  Howl | null = null;
   private activeStinger: Howl | null = null;
+  private diceRollSfx:   Howl | null = null;
   private muted = false;
 
   setMuted(muted: boolean): void {
@@ -89,9 +94,38 @@ export class AudioManager {
     if (this.boardTrack) this.boardTrack.fade(this.boardTrack.volume(), FULL_VOLUME, FADE_MS);
   }
 
+  playDiceClick(): void {
+    const sfx = new Howl({ src: [DICE_CLICK_SFX], loop: false, volume: FULL_VOLUME });
+    if (!this.muted) sfx.play();
+  }
+
+  playDiceRoll(): void {
+    if (this.diceRollSfx) {
+      this.diceRollSfx.stop();
+      this.diceRollSfx.unload();
+    }
+    this.diceRollSfx = new Howl({ src: [DICE_ROLL_SFX], loop: false, volume: FULL_VOLUME });
+    if (!this.muted) this.diceRollSfx.play();
+  }
+
+  startVictoryTrack(): void {
+    this.stopAll();
+    this.victoryTrack = new Howl({ src: [VICTORY_TRACK], loop: true, volume: FULL_VOLUME });
+    if (!this.muted) this.victoryTrack.play();
+  }
+
+  stopVictoryTrack(): void {
+    if (!this.victoryTrack) return;
+    const track = this.victoryTrack;
+    this.victoryTrack = null;
+    track.fade(track.volume(), 0, FADE_MS);
+    setTimeout(() => { track.stop(); track.unload(); }, FADE_MS + 50);
+  }
+
   private stopAll(): void {
     if (this.boardTrack)    { this.boardTrack.stop();    this.boardTrack.unload();    this.boardTrack    = null; }
     if (this.lobbyTrack)    { this.lobbyTrack.stop();    this.lobbyTrack.unload();    this.lobbyTrack    = null; }
+    if (this.victoryTrack)  { this.victoryTrack.stop();  this.victoryTrack.unload();  this.victoryTrack  = null; }
     if (this.activeStinger) { this.activeStinger.stop(); this.activeStinger.unload(); this.activeStinger = null; }
   }
 }
