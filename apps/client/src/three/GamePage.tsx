@@ -113,24 +113,17 @@ export function GamePage() {
   // Timeout de segurança: abas em background pausam requestAnimationFrame,
   // então o evento dice:done (emitido pela física do dado) nunca é emitido e
   // isDiceRolling fica travado. Após 6s, forçamos o reset para o jogo não travar.
+  //
+  // Intencionalmente NÃO resetamos isDiceRolling no evento visibilitychange:
+  // se a aba volta e o dado ainda está em voo, o rAF retoma e emite dice:done
+  // naturalmente. Resetar aqui liberaria o botão prematuramente e permitiria
+  // disparar um segundo TURN_ROLL, causando loop de lançamentos.
   const DICE_ROLL_SAFETY_MS = 6000;
   useEffect(() => {
     if (!isDiceRolling) return;
     const safety = setTimeout(() => setIsDiceRolling(false), DICE_ROLL_SAFETY_MS);
     return () => clearTimeout(safety);
   }, [isDiceRolling]);
-
-  // Ao voltar o foco na aba, reconcilia estados visuais que podem ter ficado presos
-  // durante a pausa do rAF. A store já tem o estado autoritativo do servidor.
-  useEffect(() => {
-    function onVisibility() {
-      if (document.hidden) return;
-      setIsDiceRolling(false);
-      setIsPawnSettling(false);
-    }
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, []);
 
   useEffect(() => {
     function onGameState(s: GameSession) {

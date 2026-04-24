@@ -166,6 +166,11 @@ export class SessionManager {
     if (!entry) throw new Error('SESSION_NOT_FOUND');
 
     const { session, fsm } = entry;
+    // Idempotente: múltiplos setTimeouts de autoStart podem tentar iniciar duas vezes.
+    // Se já ACTIVE, retorna a sessão sem re-sortear currentPlayerIndex / turnManager
+    // (bug anterior: sobrescrevia o sorteio, descompassando a tela de TURN_DRAW do jogo).
+    if (fsm.state === 'ACTIVE') return session;
+
     const playerIds = session.players.map((p) => p.id);
     const startIndex = playerIds.length > 0 ? this.randomIndexFn(playerIds.length) : 0;
     const tm = new TurnManager(playerIds, { startIndex });
@@ -177,6 +182,23 @@ export class SessionManager {
     entry.startedAt = Date.now();
     tm.start();
     return session;
+  }
+
+  /**
+   * Se o jogador apontado por `nextPlayerId` está offline, avança o turnManager
+   * até encontrar um online. Safety: pára após 1 volta completa (evita loop se
+   * todos estiverem offline — nesse caso retorna o último tentado).
+   */
+  private advancePastOffline(session: GameSession, turnManager: TurnManager, nextPlayerId: string): string {
+    let candidateId = nextPlayerId;
+    let candidate = session.players.find((p) => p.id === candidateId);
+    let attempts = 0;
+    while (candidate && candidate.isConnected === false && attempts < session.players.length) {
+      candidateId = turnManager.next();
+      candidate = session.players.find((p) => p.id === candidateId);
+      attempts++;
+    }
+    return candidateId;
   }
 
   rollDice(
@@ -205,6 +227,8 @@ export class SessionManager {
       nextPlayer.skipNextTurn = false;
       nextPlayerId = turnManager.next();
     }
+    // Pula jogadores offline (desconectados fora da vez deles não foram skipados antes).
+    nextPlayerId = this.advancePastOffline(session, turnManager, nextPlayerId);
     session.currentPlayerIndex = session.players.findIndex((p) => p.id === nextPlayerId);
 
     // ── Última rodada ────────────────────────────────────────────────────────
@@ -331,7 +355,20 @@ export class SessionManager {
       latencyMs,
     });
 
-    return { result, nextPlayerId: pendingQuiz.nextPlayerId };
+    // Se o próximo jogador (calculado no rollDice) ficou offline durante o quiz,
+    // pula para o próximo online.
+    const { session, turnManager } = entry;
+    let nextPlayerId = pendingQuiz.nextPlayerId;
+    const nextPlayer = session.players.find((p) => p.id === nextPlayerId);
+    if (turnManager && nextPlayer && nextPlayer.isConnected === false) {
+      // turnManager.next() ainda está apontando um passo à frente de pendingQuiz.nextPlayerId
+      // (rollDice já chamou next()). Precisamos começar do nextPlayerId e avançar dali.
+      // Como não dá para "voltar" o turnManager, avançamos N-1 vezes e chamamos advancePastOffline.
+      nextPlayerId = this.advancePastOffline(session, turnManager, nextPlayerId);
+      session.currentPlayerIndex = session.players.findIndex((p) => p.id === nextPlayerId);
+    }
+
+    return { result, nextPlayerId };
   }
 
   private _calcPoints(servedAt: number, latencyMs: number, timeoutSeconds: number): number {
@@ -452,7 +489,8 @@ export class SessionManager {
 
     const currentPlayer = session.players[session.currentPlayerIndex];
     if (currentPlayer.id === playerId && turnManager) {
-      const nextPlayerId = turnManager.next();
+      let nextPlayerId = turnManager.next();
+      nextPlayerId = this.advancePastOffline(session, turnManager, nextPlayerId);
       session.currentPlayerIndex = session.players.findIndex((p) => p.id === nextPlayerId);
       return { nextPlayerId, turnAdvanced: true };
     }
