@@ -52,6 +52,7 @@ interface SessionManagerConfig {
   rollDiceFn?: () => number;
   quizService?: QuizService;
   nowFn?: () => number;  // injetável para testes determinísticos
+  randomIndexFn?: (max: number) => number; // injetável para testes determinísticos
 }
 
 export class SessionManager {
@@ -60,16 +61,20 @@ export class SessionManager {
   private readonly rollDiceFn: () => number;
   private readonly quizService: QuizService;
   private readonly nowFn: () => number;
+  private readonly randomIndexFn: (max: number) => number;
 
   constructor(rollDiceFnOrConfig: (() => number) | SessionManagerConfig = {}) {
     if (typeof rollDiceFnOrConfig === 'function') {
       this.rollDiceFn = rollDiceFnOrConfig;
       this.quizService = new QuizService();
       this.nowFn = Date.now;
+      this.randomIndexFn = () => 0;
     } else {
       this.rollDiceFn = rollDiceFnOrConfig.rollDiceFn ?? DiceService.roll;
       this.quizService = rollDiceFnOrConfig.quizService ?? new QuizService();
       this.nowFn = rollDiceFnOrConfig.nowFn ?? Date.now;
+      // Default determinístico (0) para testes; produção injeta Math.random-based em index.ts.
+      this.randomIndexFn = rollDiceFnOrConfig.randomIndexFn ?? (() => 0);
     }
   }
 
@@ -162,8 +167,10 @@ export class SessionManager {
 
     const { session, fsm } = entry;
     const playerIds = session.players.map((p) => p.id);
-    const tm = new TurnManager(playerIds);
+    const startIndex = playerIds.length > 0 ? this.randomIndexFn(playerIds.length) : 0;
+    const tm = new TurnManager(playerIds, { startIndex });
     entry.turnManager = tm;
+    session.currentPlayerIndex = startIndex;
 
     fsm.dispatch(EVENTS.GAME_START);
     session.state = fsm.state;

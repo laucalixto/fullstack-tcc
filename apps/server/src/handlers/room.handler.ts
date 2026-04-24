@@ -150,13 +150,29 @@ export function registerRoomHandler(
     }
   });
 
-  // Todos saíram do tutorial → emite GAME_BEGIN para entrada simultânea no tabuleiro
+  // Todos saíram do tutorial → emite GAME_BEGIN + TURN_DRAW (sorteio visual).
+  // TURN_DRAW é atrasado para garantir que todos os clientes montaram o GamePage
+  // e registraram o listener (eles estão em transição TutorialOverlay → GameLoading → GamePage).
   socket.on(EVENTS.PLAYER_GAME_READY, (payload: PlayerGameReadyPayload) => {
     try {
       const allReady = sm.markGameReady(payload.sessionId, payload.playerId);
-      if (allReady) {
-        io.to(payload.sessionId).emit(EVENTS.GAME_BEGIN, { sessionId: payload.sessionId });
-      }
+      if (!allReady) return;
+      io.to(payload.sessionId).emit(EVENTS.GAME_BEGIN, { sessionId: payload.sessionId });
+
+      const TURN_DRAW_DELAY_MS    = 800;   // tempo para clientes montarem GamePage
+      const TURN_DRAW_DURATION_MS = 6000;  // intro(2s) + animação(2s) + hold(2s) no cliente
+
+      setTimeout(() => {
+        const session = sm.getById(payload.sessionId);
+        if (!session) return;
+        const winner = session.players[session.currentPlayerIndex];
+        if (!winner) return;
+        io.to(payload.sessionId).emit(EVENTS.TURN_DRAW, {
+          sessionId: payload.sessionId,
+          winnerPlayerId: winner.id,
+          durationMs: TURN_DRAW_DURATION_MS,
+        });
+      }, TURN_DRAW_DELAY_MS);
     } catch {
       // sessão não encontrada
     }

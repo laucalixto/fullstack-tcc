@@ -8,6 +8,7 @@ import { PlayerList } from '../hud/PlayerList';
 import { InactivityTimer } from '../hud/InactivityTimer';
 import { ChallengeModal } from '../lobby/ChallengeModal';
 import { EffectCard } from '../lobby/EffectCard';
+import { FirstPlayerDraw } from '../lobby/FirstPlayerDraw';
 import { useGameStore } from '../stores/gameStore';
 import { socket } from '../ws/socket';
 import { gameBus } from './EventBus';
@@ -56,6 +57,10 @@ export function GamePage() {
   const [isDiceRolling, setIsDiceRolling] = useState(false);
   const [isPawnSettling, setIsPawnSettling] = useState(false);
   const [victoryPending, setVictoryPending] = useState(false);
+  const [drawPayload, setDrawPayload] = useState<{ winnerPlayerId: string; durationMs: number } | null>(null);
+  // Bloqueia turno/câmera/botão enquanto sorteio inicial está em curso.
+  // Libera via onComplete do overlay ou fallback (se TURN_DRAW nunca chegar — ex: reconexão).
+  const [drawBlocking, setDrawBlocking] = useState(true);
 
   // Dual-condition: isPawnSettling só limpa quando pawn:done E TURN_CHANGED ocorrerem
   const settlePawnDone    = useRef(false);
@@ -68,21 +73,63 @@ export function GamePage() {
     }
   }, []);
 
-  // Sincroniza o estado inicial ao montar: GAME_STATE pode ter chegado antes do GamePage existir
+  // Sincroniza o estado inicial ao montar: GAME_STATE pode ter chegado antes do GamePage existir.
+  // `players:sync` é seguro para rodar sempre (posiciona peões no tabuleiro).
+  // `active:player` é atrasado até o sorteio (TURN_DRAW) terminar — evita mover câmera/turno
+  // durante o overlay do sorteio. Fallback de 2.5s caso TURN_DRAW nunca chegue (ex: reconexão).
   useEffect(() => {
     const s = useGameStore.getState().session;
     if (!s) return;
     gameBus.emit('players:sync', s.players);
+  }, []);
+
+  // Fallback: libera o jogo se o TURN_DRAW não chegar dentro da janela esperada
+  // (servidor atrasa 800ms + margem de segurança). Quando o overlay está rodando
+  // (drawPayload setado), o onComplete cuida da liberação e desativamos o fallback
+  // para não competir com ele.
+  useEffect(() => {
+    if (!drawBlocking || drawPayload) return;
+    const fallback = setTimeout(() => setDrawBlocking(false), 2500);
+    return () => clearTimeout(fallback);
+  }, [drawBlocking, drawPayload]);
+
+  // Emite active:player apenas quando o sorteio liberou.
+  useEffect(() => {
+    if (drawBlocking) return;
+    const s = useGameStore.getState().session;
+    if (!s) return;
     const currentPlayer = s.players[s.currentPlayerIndex];
     if (currentPlayer) {
       gameBus.emit('active:player', { tileIndex: currentPlayer.position, playerId: currentPlayer.id });
     }
-  }, []);
+  }, [drawBlocking]);
 
   // Trilha sonora do tabuleiro
   useEffect(() => {
     audioManager.startBoardTrack();
     return () => { audioManager.stopBoardTrack(); };
+  }, []);
+
+  // Timeout de segurança: abas em background pausam requestAnimationFrame,
+  // então o evento dice:done (emitido pela física do dado) nunca é emitido e
+  // isDiceRolling fica travado. Após 6s, forçamos o reset para o jogo não travar.
+  const DICE_ROLL_SAFETY_MS = 6000;
+  useEffect(() => {
+    if (!isDiceRolling) return;
+    const safety = setTimeout(() => setIsDiceRolling(false), DICE_ROLL_SAFETY_MS);
+    return () => clearTimeout(safety);
+  }, [isDiceRolling]);
+
+  // Ao voltar o foco na aba, reconcilia estados visuais que podem ter ficado presos
+  // durante a pausa do rAF. A store já tem o estado autoritativo do servidor.
+  useEffect(() => {
+    function onVisibility() {
+      if (document.hidden) return;
+      setIsDiceRolling(false);
+      setIsPawnSettling(false);
+    }
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   useEffect(() => {
@@ -155,6 +202,10 @@ export function GamePage() {
       setVictoryPending(true); // will fire camera:victory after pawn:done
     }
 
+    function onTurnDraw(payload: { sessionId: string; winnerPlayerId: string; durationMs: number }) {
+      setDrawPayload({ winnerPlayerId: payload.winnerPlayerId, durationMs: payload.durationMs });
+    }
+
     socket.on(EVENTS.GAME_STATE,    onGameState);
     socket.on(EVENTS.TURN_CHANGED,  onTurnChanged);
     socket.on(EVENTS.TURN_RESULT,   onTurnResult);
@@ -162,6 +213,7 @@ export function GamePage() {
     socket.on(EVENTS.QUIZ_RESULT,   onQuizResult);
     socket.on(EVENTS.GAME_FINISHED, onGameFinished);
     socket.on(EVENTS.TILE_EFFECT,   onTileEffect);
+    socket.on(EVENTS.TURN_DRAW,     onTurnDraw);
 
     const unsubDiceDone = gameBus.on<{ face: number }>('dice:done', () => {
       setIsDiceRolling(false);
@@ -218,6 +270,7 @@ export function GamePage() {
       socket.off(EVENTS.QUIZ_QUESTION, onQuizQuestion);
       socket.off(EVENTS.QUIZ_RESULT,   onQuizResult);
       socket.off(EVENTS.GAME_FINISHED, onGameFinished);
+      socket.off(EVENTS.TURN_DRAW,     onTurnDraw);
       unsubDiceDone();
       unsubRollStart();
       unsubPawnDone();
@@ -238,13 +291,13 @@ export function GamePage() {
   }, [effectCardPayload, session, myPlayerId]);
 
   const handleRollDice = useCallback(() => {
-    if (!session || !myPlayerId || isDiceRolling || isPawnSettling || quizPayload || effectCardPayload) return;
+    if (!session || !myPlayerId || isDiceRolling || isPawnSettling || quizPayload || effectCardPayload || drawPayload || drawBlocking) return;
     audioManager.playDiceClick();
     audioManager.playDiceRoll();
     setIsDiceRolling(true);
     socket.emit(EVENTS.TURN_ROLL, { sessionId: session.id, playerId: myPlayerId });
     gameBus.emit('dice:throw', { position: DICE_ZONE });
-  }, [session, myPlayerId, isDiceRolling, isPawnSettling, quizPayload, effectCardPayload]);
+  }, [session, myPlayerId, isDiceRolling, isPawnSettling, quizPayload, effectCardPayload, drawPayload, drawBlocking]);
 
   const handleAnswer = useCallback((selectedText: string) => {
     if (!quizPayload) return;
@@ -329,7 +382,7 @@ export function GamePage() {
         </div>
 
         {/* Inactivity timer */}
-        {isMyTurn && (
+        {isMyTurn && !drawBlocking && !drawPayload && (
           <InactivityTimer
             seconds={15}
             active={isMyTurn && !quizPayload && !effectCardPayload && !isPawnSettling}
@@ -339,7 +392,7 @@ export function GamePage() {
       </div>
 
       {/* Bottom-center: botão dado — estilo reference (círculo grande) */}
-      {isMyTurn && (
+      {isMyTurn && !drawBlocking && !drawPayload && (
         <div
           className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-4"
           style={{ pointerEvents: 'auto' }}
@@ -379,6 +432,16 @@ export function GamePage() {
           onTimeout={handleTimeout}
           timeoutSeconds={quizPayload.timeoutSeconds}
           result={quizResult}
+        />
+      )}
+
+      {/* Sorteio do primeiro jogador — aparece após GAME_BEGIN */}
+      {drawPayload && session && (
+        <FirstPlayerDraw
+          players={session.players.map((p) => ({ id: p.id, name: p.name }))}
+          winnerPlayerId={drawPayload.winnerPlayerId}
+          durationMs={drawPayload.durationMs}
+          onComplete={() => { setDrawPayload(null); setDrawBlocking(false); }}
         />
       )}
     </div>

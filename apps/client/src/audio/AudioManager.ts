@@ -6,6 +6,8 @@ const LOBBY_TRACK    = '/audio/track-lobby.mp3';
 const VICTORY_TRACK  = '/audio/track-victory.mp3';
 const DICE_CLICK_SFX = '/audio/sfx-dice-click.mp3';
 const DICE_ROLL_SFX  = '/audio/sfx-dice-roll.mp3';
+const DRAW_TICK_SFX  = '/audio/sfx-draw-tick.mp3';
+const DRAW_WIN_SFX   = '/audio/sfx-draw-win.mp3';
 
 const STINGERS: Record<CardCategory, string> = {
   accident:   '/audio/stinger-accident.mp3',
@@ -106,6 +108,16 @@ export class AudioManager {
     }
     this.diceRollSfx = new Howl({ src: [DICE_ROLL_SFX], loop: false, volume: FULL_VOLUME });
     if (!this.muted) this.diceRollSfx.play();
+  }
+
+  playDrawTick(): void {
+    const sfx = new Howl({ src: [DRAW_TICK_SFX], loop: false, volume: FULL_VOLUME });
+    if (!this.muted) sfx.play();
+  }
+
+  playDrawWin(): void {
+    const sfx = new Howl({ src: [DRAW_WIN_SFX], loop: false, volume: FULL_VOLUME });
+    if (!this.muted) sfx.play();
   }
 
   startVictoryTrack(): void {

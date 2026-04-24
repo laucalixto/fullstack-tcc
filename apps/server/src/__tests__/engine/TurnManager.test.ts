@@ -29,6 +29,23 @@ describe('TurnManager', () => {
     expect(tm.currentPlayer).toBe('p1');
   });
 
+  it('aceita startIndex e começa nesse jogador', () => {
+    const tm = new TurnManager(['p1', 'p2', 'p3', 'p4'], { startIndex: 2 });
+    expect(tm.currentPlayer).toBe('p3');
+  });
+
+  it('next() a partir do startIndex rotaciona normalmente', () => {
+    const tm = new TurnManager(['p1', 'p2', 'p3'], { startIndex: 2 });
+    tm.next();
+    expect(tm.currentPlayer).toBe('p1');
+    tm.next();
+    expect(tm.currentPlayer).toBe('p2');
+  });
+
+  it('startIndex fora do range lança erro', () => {
+    expect(() => new TurnManager(['p1', 'p2'], { startIndex: 5 })).toThrow(/startIndex/i);
+  });
+
   it('next() retorna o ID do próximo jogador', () => {
     const tm = new TurnManager(['p1', 'p2']);
     expect(tm.next()).toBe('p2');

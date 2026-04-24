@@ -43,10 +43,12 @@ describe('lobby sync — integração', () => {
     });
   }
 
-  async function createRoom(fac: ClientSocket, maxPlayers = 2): Promise<GameSession> {
+  // Helper: `creator` é só o socket que emite ROOM_CREATE para instanciar a sala
+  // no teste. Não participa do fluxo de início — esse cabe aos jogadores.
+  async function createRoom(creator: ClientSocket, maxPlayers = 2): Promise<GameSession> {
     const [state] = await Promise.all([
-      waitFor<GameSession>(fac, EVENTS.GAME_STATE),
-      Promise.resolve(fac.emit(EVENTS.ROOM_CREATE, { facilitatorId: 'fac-1', maxPlayers })),
+      waitFor<GameSession>(creator, EVENTS.GAME_STATE),
+      Promise.resolve(creator.emit(EVENTS.ROOM_CREATE, { facilitatorId: 'creator-1', maxPlayers })),
     ]);
     return state;
   }
@@ -63,11 +65,11 @@ describe('lobby sync — integração', () => {
   // ── Fase 1: LOBBY_READY → GAME_STARTING → GAME_STATE(ACTIVE) ────────────────
 
   it('LOBBY_READY de todos dispara GAME_STARTING com autoStartAt', async () => {
-    const fac = await connect();
-    const p1  = await connect();
-    const p2  = await connect();
+    const creator = await connect();
+    const p1 = await connect();
+    const p2 = await connect();
 
-    const { id: sessionId, pin } = await createRoom(fac, 2);
+    const { id: sessionId, pin } = await createRoom(creator, 2);
     const p1Id = await joinRoom(p1, pin);
     const p2Id = await joinRoom(p2, pin);
 
@@ -83,11 +85,11 @@ describe('lobby sync — integração', () => {
   }, 8000);
 
   it('GAME_STARTING dispara GAME_STATE(ACTIVE) após delay', async () => {
-    const fac = await connect();
-    const p1  = await connect();
-    const p2  = await connect();
+    const creator = await connect();
+    const p1 = await connect();
+    const p2 = await connect();
 
-    const { id: sessionId, pin } = await createRoom(fac, 2);
+    const { id: sessionId, pin } = await createRoom(creator, 2);
     const p1Id = await joinRoom(p1, pin);
     const p2Id = await joinRoom(p2, pin);
 
@@ -103,11 +105,11 @@ describe('lobby sync — integração', () => {
   }, 10000);
 
   it('LOBBY_READY de apenas um jogador NÃO dispara GAME_STARTING', async () => {
-    const fac = await connect();
-    const p1  = await connect();
-    const p2  = await connect();
+    const creator = await connect();
+    const p1 = await connect();
+    const p2 = await connect();
 
-    const { id: sessionId, pin } = await createRoom(fac, 2);
+    const { id: sessionId, pin } = await createRoom(creator, 2);
     const p1Id = await joinRoom(p1, pin);
     await joinRoom(p2, pin);
 
@@ -122,16 +124,16 @@ describe('lobby sync — integração', () => {
   // ── Fase 2: PLAYER_GAME_READY → GAME_BEGIN ───────────────────────────────────
 
   it('PLAYER_GAME_READY de todos dispara GAME_BEGIN', async () => {
-    const fac = await connect();
-    const p1  = await connect();
-    const p2  = await connect();
+    const creator = await connect();
+    const p1 = await connect();
+    const p2 = await connect();
 
-    const { id: sessionId, pin } = await createRoom(fac, 2);
+    const { id: sessionId, pin } = await createRoom(creator, 2);
     const p1Id = await joinRoom(p1, pin);
     const p2Id = await joinRoom(p2, pin);
 
     // Iniciar jogo diretamente (pulando lobby sync para este teste)
-    fac.emit(EVENTS.GAME_START, { sessionId });
+    creator.emit(EVENTS.GAME_START, { sessionId });
     await waitFor(p1, EVENTS.GAME_STATE, 3000);
 
     // Ambos sinalizam prontos para o tabuleiro
@@ -228,16 +230,41 @@ describe('lobby sync — integração', () => {
     expect(progress.needed).toBe(2);
   }, 8000);
 
-  it('PLAYER_GAME_READY de apenas um NÃO dispara GAME_BEGIN', async () => {
-    const fac = await connect();
-    const p1  = await connect();
-    const p2  = await connect();
+  // ── Fase 4: TURN_DRAW (sorteio visual do primeiro jogador) ───────────────────
 
-    const { id: sessionId, pin } = await createRoom(fac, 2);
+  it('após GAME_BEGIN, servidor emite TURN_DRAW com winnerPlayerId e durationMs', async () => {
+    const creator = await connect();
+    const p1 = await connect();
+    const p2 = await connect();
+
+    const { id: sessionId, pin } = await createRoom(creator, 2);
+    const p1Id = await joinRoom(p1, pin);
+    const p2Id = await joinRoom(p2, pin);
+
+    creator.emit(EVENTS.GAME_START, { sessionId });
+    await waitFor(p1, EVENTS.GAME_STATE, 3000);
+
+    const [draw] = await Promise.all([
+      waitFor<{ sessionId: string; winnerPlayerId: string; durationMs: number }>(p1, EVENTS.TURN_DRAW, 3000),
+      Promise.resolve(p1.emit(EVENTS.PLAYER_GAME_READY, { sessionId, playerId: p1Id })),
+      Promise.resolve(p2.emit(EVENTS.PLAYER_GAME_READY, { sessionId, playerId: p2Id })),
+    ]);
+
+    expect(draw.sessionId).toBe(sessionId);
+    expect([p1Id, p2Id]).toContain(draw.winnerPlayerId);
+    expect(draw.durationMs).toBeGreaterThan(0);
+  }, 10000);
+
+  it('PLAYER_GAME_READY de apenas um NÃO dispara GAME_BEGIN', async () => {
+    const creator = await connect();
+    const p1 = await connect();
+    const p2 = await connect();
+
+    const { id: sessionId, pin } = await createRoom(creator, 2);
     const p1Id = await joinRoom(p1, pin);
     await joinRoom(p2, pin);
 
-    fac.emit(EVENTS.GAME_START, { sessionId });
+    creator.emit(EVENTS.GAME_START, { sessionId });
     await waitFor(p1, EVENTS.GAME_STATE, 3000);
 
     let receivedGameBegin = false;

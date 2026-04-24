@@ -3,6 +3,7 @@ import type { PlayerId } from '@safety-board/shared';
 interface TurnManagerOptions {
   onInactivity?: (playerId: PlayerId) => void;
   inactivityMs?: number;
+  startIndex?: number;
 }
 
 export class TurnManager {
@@ -15,6 +16,12 @@ export class TurnManager {
   constructor(players: PlayerId[], options: TurnManagerOptions = {}) {
     if (players.length === 0) {
       throw new Error('TurnManager: players list cannot be empty');
+    }
+    if (options.startIndex !== undefined) {
+      if (options.startIndex < 0 || options.startIndex >= players.length) {
+        throw new Error(`TurnManager: startIndex out of range`);
+      }
+      this.currentIndex = options.startIndex;
     }
     this.players = [...players];
     this.onInactivity = options.onInactivity ?? (() => undefined);

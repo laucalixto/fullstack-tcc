@@ -80,7 +80,13 @@ const makeQuestion = () => ({
 });
 
 function renderGamePage() {
-  return render(<MemoryRouter><GamePage /></MemoryRouter>);
+  // Ativa fake timers ANTES do render para interceptar o setTimeout do fallback
+  // do sorteio (drawBlocking, 2.5s). Depois de avançar, mantém fake ativo para
+  // que os demais testes possam usar advanceTimersByTime livremente.
+  vi.useFakeTimers();
+  const result = render(<MemoryRouter><GamePage /></MemoryRouter>);
+  act(() => { vi.advanceTimersByTime(2600); });
+  return result;
 }
 
 // ─── Testes ──────────────────────────────────────────────────────────────────

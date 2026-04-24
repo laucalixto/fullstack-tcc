@@ -10,7 +10,9 @@ async function main(): Promise<void> {
   // Conecta ao MongoDB antes de iniciar o servidor
   await connectDB();
 
-  const sessionManager = new SessionManager();
+  const sessionManager = new SessionManager({
+    randomIndexFn: (max) => Math.floor(Math.random() * max),
+  });
   const app = createApp({ sessionManager });
   const httpServer = createServer(app);
   attachSocketIO(httpServer, sessionManager);

@@ -207,4 +207,29 @@ describe('AudioManager', () => {
   it('stopVictoryTrack é no-op quando não iniciado', () => {
     expect(() => mgr.stopVictoryTrack()).not.toThrow();
   });
+
+  // ─── SFX do sorteio do primeiro jogador ──────────────────────────────────────
+
+  it('playDrawTick instancia Howl com o SFX do highlight do sorteio', () => {
+    mgr.playDrawTick();
+    expect(Howl).toHaveBeenCalledWith(expect.objectContaining({
+      src: ['/audio/sfx-draw-tick.mp3'],
+      loop: false,
+    }));
+  });
+
+  it('playDrawTick não reproduz quando muted', () => {
+    mgr.setMuted(true);
+    mgr.playDrawTick();
+    const instance = vi.mocked(Howl).mock.results[0].value;
+    expect(instance.play).not.toHaveBeenCalled();
+  });
+
+  it('playDrawWin instancia Howl com o SFX do vencedor do sorteio', () => {
+    mgr.playDrawWin();
+    expect(Howl).toHaveBeenCalledWith(expect.objectContaining({
+      src: ['/audio/sfx-draw-win.mp3'],
+      loop: false,
+    }));
+  });
 });

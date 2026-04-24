@@ -28,6 +28,7 @@ export const EVENTS = {
   TURN_ROLL: 'turn:roll',
   TURN_RESULT: 'turn:result',
   TURN_CHANGED: 'turn:changed',
+  TURN_DRAW: 'turn:draw', // sorteio visual do primeiro jogador
 
   // ─── Jogador ──────────────────────────────────────────────────────────────
   PLAYER_RENAME: 'player:rename',
@@ -148,6 +149,12 @@ export interface GameBeginPayload {
 
 export interface TurnChangedPayload {
   playerId: string;
+}
+
+export interface TurnDrawPayload {
+  sessionId: string;
+  winnerPlayerId: string;
+  durationMs: number;
 }
 
 export interface TurnResultPayload {
