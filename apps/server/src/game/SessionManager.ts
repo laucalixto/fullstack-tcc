@@ -39,6 +39,7 @@ interface SessionEntry {
   totalAnswersByPlayer: Map<string, number>;
   lobbyReadyPlayers: Set<string>;
   gameReadyPlayers: Set<string>;
+  forceStartVotes: Set<string>;
   finishCandidateId: string | null;
   finishRoundLastPlayerIndex: number | null;
   pendingTileEffect: PendingTileEffect | null;
@@ -110,6 +111,7 @@ export class SessionManager {
       totalAnswersByPlayer: new Map(),
       lobbyReadyPlayers: new Set(),
       gameReadyPlayers: new Set(),
+      forceStartVotes: new Set(),
       finishCandidateId: null,
       finishRoundLastPlayerIndex: null,
       pendingTileEffect: null,
@@ -365,14 +367,51 @@ export class SessionManager {
   markLobbyReady(sessionId: string, playerId: string): boolean {
     const entry = this.sessions.get(sessionId);
     if (!entry) throw new Error('SESSION_NOT_FOUND');
+    const wasNew = !entry.lobbyReadyPlayers.has(playerId);
     entry.lobbyReadyPlayers.add(playerId);
     // Keep session.lobbyReadyPlayers in sync (for GAME_STATE broadcasts)
     entry.session.lobbyReadyPlayers = [...entry.lobbyReadyPlayers];
+    // Nova chegada ao lobby invalida votos em andamento — evita kick acidental.
+    if (wasNew) entry.forceStartVotes.clear();
     const MIN_PLAYERS = 2;
+    // Auto-start só quando TODOS os maxPlayers entraram e sinalizaram ready.
+    // Caso sala não encha, o caminho alternativo é o voto unânime via requestForceStart.
     return (
-      entry.session.players.length >= MIN_PLAYERS &&
-      entry.lobbyReadyPlayers.size >= entry.session.players.length
+      entry.lobbyReadyPlayers.size >= MIN_PLAYERS &&
+      entry.lobbyReadyPlayers.size >= entry.session.maxPlayers
     );
+  }
+
+  requestForceStart(
+    sessionId: string,
+    playerId: string,
+  ): { started: boolean; votes: number; needed: number; droppedPlayerIds?: string[] } {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) throw new Error('SESSION_NOT_FOUND');
+    const { session } = entry;
+    if (session.maxPlayers < 3) throw new Error('NOT_APPLICABLE');
+    if (entry.lobbyReadyPlayers.size < 2) throw new Error('NOT_ENOUGH_READY');
+    if (!entry.lobbyReadyPlayers.has(playerId)) throw new Error('NOT_IN_LOBBY');
+
+    entry.forceStartVotes.add(playerId);
+    // Remove votos de quem já não está mais no lobby (desconexão).
+    for (const voter of entry.forceStartVotes) {
+      if (!entry.lobbyReadyPlayers.has(voter)) entry.forceStartVotes.delete(voter);
+    }
+
+    const needed = entry.lobbyReadyPlayers.size;
+    const votes = entry.forceStartVotes.size;
+
+    if (votes < needed) {
+      return { started: false, votes, needed };
+    }
+
+    const keep = new Set(entry.lobbyReadyPlayers);
+    const dropped = session.players.filter((p) => !keep.has(p.id)).map((p) => p.id);
+    session.players = session.players.filter((p) => keep.has(p.id));
+    for (const id of dropped) entry.droppedPlayerIds.add(id);
+    entry.forceStartVotes.clear();
+    return { started: true, votes, needed, droppedPlayerIds: dropped };
   }
 
   renamePlayer(sessionId: string, playerId: string, name: string): void {
@@ -388,6 +427,15 @@ export class SessionManager {
     if (!entry) return { nextPlayerId: null, turnAdvanced: false };
 
     const { session, turnManager } = entry;
+
+    // No lobby: remove das estruturas de ready/voto (o jogador pode reentrar depois via PIN).
+    if (session.state === 'WAITING') {
+      entry.lobbyReadyPlayers.delete(playerId);
+      entry.forceStartVotes.delete(playerId);
+      entry.session.lobbyReadyPlayers = [...entry.lobbyReadyPlayers];
+      return { nextPlayerId: null, turnAdvanced: false };
+    }
+
     if (session.state !== 'ACTIVE') return { nextPlayerId: null, turnAdvanced: false };
 
     const player = session.players.find((p) => p.id === playerId);

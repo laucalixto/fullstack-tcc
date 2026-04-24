@@ -40,15 +40,29 @@ describe('SessionManager — markLobbyReady', () => {
     expect(stillFalse).toBe(false);
   });
 
-  it('retorna true quando todos os jogadores presentes ficam prontos, mesmo com maxPlayers > players.length', () => {
+  it('retorna false quando nem todos os slots de maxPlayers estão preenchidos e prontos', () => {
     const sm = new SessionManager();
     const session = sm.createSession('fac-1', undefined, undefined, 4); // sala para 4
     const { playerId: p1 } = sm.joinSession(session.pin, 'Alice');
     const { playerId: p2 } = sm.joinSession(session.pin, 'Bob');
-    // apenas 2 de 4 slots preenchidos
+    // apenas 2 de 4 slots preenchidos — não deve disparar auto-start
     sm.markLobbyReady(session.id, p1);
     const allReady = sm.markLobbyReady(session.id, p2);
-    expect(allReady).toBe(true); // todos os presentes confirmaram
+    expect(allReady).toBe(false);
+  });
+
+  it('retorna true quando os maxPlayers slots estão preenchidos e todos prontos', () => {
+    const sm = new SessionManager();
+    const session = sm.createSession('fac-1', undefined, undefined, 4); // sala para 4
+    const { playerId: p1 } = sm.joinSession(session.pin, 'Alice');
+    const { playerId: p2 } = sm.joinSession(session.pin, 'Bob');
+    const { playerId: p3 } = sm.joinSession(session.pin, 'Carol');
+    const { playerId: p4 } = sm.joinSession(session.pin, 'Dan');
+    sm.markLobbyReady(session.id, p1);
+    sm.markLobbyReady(session.id, p2);
+    sm.markLobbyReady(session.id, p3);
+    const allReady = sm.markLobbyReady(session.id, p4);
+    expect(allReady).toBe(true);
   });
 
   it('nunca retorna true com apenas 1 jogador — partida exige mínimo 2', () => {

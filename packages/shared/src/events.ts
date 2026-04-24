@@ -12,6 +12,9 @@ export const EVENTS = {
   ROOM_JOINED: 'room:joined',
   ROOM_ERROR: 'room:error',
   LOBBY_READY: 'lobby:ready',
+  LOBBY_FORCE_START: 'lobby:force-start',
+  LOBBY_FORCE_START_PROGRESS: 'lobby:force-start:progress',
+  PLAYER_DROPPED: 'player:dropped',
   GAME_STARTING: 'game:starting',
 
   // ─── Jogo ─────────────────────────────────────────────────────────────────
@@ -110,6 +113,23 @@ export interface GameFinishedPayload {
 export interface LobbyReadyPayload {
   sessionId: string;
   playerId: string;
+}
+
+export interface LobbyForceStartPayload {
+  sessionId: string;
+  playerId: string;
+}
+
+export interface LobbyForceStartProgressPayload {
+  sessionId: string;
+  votes: number;
+  needed: number;
+}
+
+export interface PlayerDroppedPayload {
+  sessionId: string;
+  playerId: string;
+  reason: 'FORCE_START';
 }
 
 export interface GameStartingPayload {

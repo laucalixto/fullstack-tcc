@@ -6,6 +6,7 @@ import {
   type RoomJoinedPayload,
   type RoomErrorPayload,
   type LobbyReadyPayload,
+  type LobbyForceStartPayload,
   type PlayerGameReadyPayload,
   type PlayerRenamePayload,
 } from '@safety-board/shared';
@@ -96,6 +97,56 @@ export function registerRoomHandler(
       }
     } catch {
       // sessão não encontrada — jogador pode ter se desconectado
+    }
+  });
+
+  // Voto dos presentes no lobby para forçar início sem esperar sala cheia.
+  // Unanimidade dispara GAME_STARTING; ausentes recebem PLAYER_DROPPED.
+  socket.on(EVENTS.LOBBY_FORCE_START, (payload: LobbyForceStartPayload) => {
+    try {
+      const result = sm.requestForceStart(payload.sessionId, payload.playerId);
+
+      if (!result.started) {
+        io.to(payload.sessionId).emit(EVENTS.LOBBY_FORCE_START_PROGRESS, {
+          sessionId: payload.sessionId,
+          votes: result.votes,
+          needed: result.needed,
+        });
+        return;
+      }
+
+      // Unânime → notifica dropados (ainda estão em CharacterSelect/PinEntry)
+      // antes de iniciar, para que seus sockets saiam da sala sem receber GAME_STATE ACTIVE.
+      for (const droppedId of result.droppedPlayerIds ?? []) {
+        io.to(payload.sessionId).emit(EVENTS.PLAYER_DROPPED, {
+          sessionId: payload.sessionId,
+          playerId: droppedId,
+          reason: 'FORCE_START',
+        });
+      }
+
+      // Broadcast novo GAME_STATE (sem os dropados) e agenda auto-start
+      const updatedSession = sm.getById(payload.sessionId);
+      if (updatedSession) {
+        io.to(payload.sessionId).emit(EVENTS.GAME_STATE, updatedSession);
+      }
+      const autoStartAt = Date.now() + autoStartDelayMs;
+      io.to(payload.sessionId).emit(EVENTS.GAME_STARTING, {
+        sessionId: payload.sessionId,
+        autoStartAt,
+      });
+      setTimeout(() => {
+        try {
+          const session = sm.startGame(payload.sessionId);
+          io.to(payload.sessionId).emit(EVENTS.GAME_STATE, session);
+          const currentPlayer = session.players[session.currentPlayerIndex];
+          io.to(payload.sessionId).emit(EVENTS.TURN_CHANGED, { playerId: currentPlayer.id });
+        } catch {
+          // sessão já iniciada ou finalizada
+        }
+      }, autoStartDelayMs);
+    } catch {
+      // NOT_APPLICABLE / NOT_ENOUGH_READY / NOT_IN_LOBBY / SESSION_NOT_FOUND — ignora
     }
   });
 

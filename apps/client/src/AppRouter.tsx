@@ -124,6 +124,18 @@ function CharacterSelectPage() {
     }
   }, [session?.id, setSession, navigate]));
 
+  // Se o jogador foi removido pela votação de "Iniciar agora" no lobby,
+  // sai do CharacterSelect para uma tela amigável.
+  useEffect(() => {
+    function onDropped(payload: { sessionId: string; playerId: string; reason: string }) {
+      if (payload.sessionId !== session?.id) return;
+      if (payload.playerId !== myPlayerId) return;
+      navigate('/sala-fechada');
+    }
+    socket.on(EVENTS.PLAYER_DROPPED, onDropped);
+    return () => { socket.off(EVENTS.PLAYER_DROPPED, onDropped); };
+  }, [session?.id, myPlayerId, navigate]);
+
   const handleConfirm = useCallback((firstName: string, lastName: string, avatarId: string) => {
     const fullName = `${firstName} ${lastName}`;
     setPendingPlayer(fullName, avatarId);
@@ -158,6 +170,8 @@ function LobbyWaitingPage() {
   const myPlayerId  = useGameStore((s) => s.myPlayerId);
   const setSession  = useGameStore((s) => s.setSession);
   const [autoStartAt, setAutoStartAt] = useState<number | undefined>();
+  const [forceStartVotes, setForceStartVotes] = useState<number | undefined>();
+  const [forceStartNeeded, setForceStartNeeded] = useState<number | undefined>();
 
   const pin         = session?.pin ?? '------';
   const sessionName = session?.name;
@@ -192,6 +206,23 @@ function LobbyWaitingPage() {
     return () => { socket.off(EVENTS.GAME_STARTING, onGameStarting); };
   }, [session?.id]);
 
+  // Progresso do voto "Iniciar agora" (quando um jogador clica, outros veem o contador)
+  useEffect(() => {
+    const sessionId = session?.id;
+    function onProgress(payload: { sessionId: string; votes: number; needed: number }) {
+      if (payload.sessionId !== sessionId) return;
+      setForceStartVotes(payload.votes);
+      setForceStartNeeded(payload.needed);
+    }
+    socket.on(EVENTS.LOBBY_FORCE_START_PROGRESS, onProgress);
+    return () => { socket.off(EVENTS.LOBBY_FORCE_START_PROGRESS, onProgress); };
+  }, [session?.id]);
+
+  const handleForceStart = useCallback(() => {
+    if (!session?.id || !myPlayerId) return;
+    socket.emit(EVENTS.LOBBY_FORCE_START, { sessionId: session.id, playerId: myPlayerId });
+  }, [session?.id, myPlayerId]);
+
   // Mantém a store sincronizada com todos os GAME_STATE recebidos no lobby
   // (P1 entra antes dos demais — sem isso, não veria os peões de P2–P4 no tabuleiro)
   useSocket(useCallback((updatedSession) => {
@@ -215,6 +246,9 @@ function LobbyWaitingPage() {
         autoStartAt={autoStartAt}
         onStart={() => {}}
         isFacilitator={false}
+        onForceStart={handleForceStart}
+        forceStartVotes={forceStartVotes}
+        forceStartNeeded={forceStartNeeded}
       />
     </>
   );
@@ -950,17 +984,42 @@ function PlayerProfilePage() {
   );
 }
 
+// ─── Sessão fechada (jogador removido pelo voto de início forçado) ───────────
+
+function SessionClosedPage() {
+  const navigate = useNavigate();
+  return (
+    <div className="bg-surface text-on-surface min-h-screen flex items-center justify-center p-8">
+      <div className="max-w-lg w-full text-center space-y-6">
+        <h1 className="text-4xl md:text-5xl font-black tracking-tighter">
+          Sessão iniciou sem você
+        </h1>
+        <p className="text-secondary text-lg">
+          Os jogadores no lobby decidiram começar a partida. Você pode entrar em outra sessão a qualquer momento.
+        </p>
+        <button
+          onClick={() => navigate('/')}
+          className="inline-flex items-center justify-center px-10 py-3 font-black uppercase tracking-[0.2em] text-white bg-primary-container rounded-xl"
+        >
+          Voltar ao início
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 export function AppRouter() {
   return (
     <Routes>
       {/* Acesso público */}
-      <Route path="/"          element={<PinEntryPage />} />
+      <Route path="/"              element={<PinEntryPage />} />
       {import.meta.env.DEV && <Route path="/preview" element={<BoardPreview />} />}
-      <Route path="/sala/:pin" element={<PinJoinPage />} />
-      <Route path="/manager"   element={<ManagerLoginPage />} />
-      <Route path="/ranking"   element={<GlobalLeaderboardPage />} />
+      <Route path="/sala/:pin"     element={<PinJoinPage />} />
+      <Route path="/sala-fechada"  element={<SessionClosedPage />} />
+      <Route path="/manager"       element={<ManagerLoginPage />} />
+      <Route path="/ranking"       element={<GlobalLeaderboardPage />} />
 
       {/* Requer sessão ativa na store */}
       <Route path="/personagem" element={<GameGuard><CharacterSelectPage /></GameGuard>} />

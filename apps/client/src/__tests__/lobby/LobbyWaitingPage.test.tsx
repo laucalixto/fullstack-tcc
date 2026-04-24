@@ -166,6 +166,107 @@ describe('LobbyWaitingPage', () => {
     expect(screen.getByTestId('player-count')).toHaveTextContent('1 / 2');
   });
 
+  // ─── Botão "Iniciar agora" — voto dos jogadores presentes ─────────────────────
+
+  it('NÃO exibe botão "Iniciar agora" em sala de 2 (auto-start cobre)', () => {
+    const session = {
+      ...makeSession(),
+      maxPlayers: 2 as const,
+      lobbyReadyPlayers: ['p1', 'p2'],
+    };
+    useGameStore.setState({ session, myPlayerId: 'p1' });
+    renderLobby();
+    expect(screen.queryByTestId('force-start-button')).not.toBeInTheDocument();
+  });
+
+  it('NÃO exibe botão quando apenas 1 jogador está no lobby de sala 4', () => {
+    const session = {
+      ...makeSession(),
+      maxPlayers: 4 as const,
+      lobbyReadyPlayers: ['p1'],
+      players: [
+        { id: 'p1', name: 'Alice', score: 0, position: 0, isConnected: true },
+      ],
+    };
+    useGameStore.setState({ session, myPlayerId: 'p1' });
+    renderLobby();
+    expect(screen.queryByTestId('force-start-button')).not.toBeInTheDocument();
+  });
+
+  it('exibe botão quando maxPlayers>=3 e 2<=ready<maxPlayers', () => {
+    const session = {
+      ...makeSession(),
+      maxPlayers: 4 as const,
+      players: [
+        { id: 'p1', name: 'Alice', score: 0, position: 0, isConnected: true },
+        { id: 'p2', name: 'Bob',   score: 0, position: 0, isConnected: true },
+      ],
+      lobbyReadyPlayers: ['p1', 'p2'],
+    };
+    useGameStore.setState({ session, myPlayerId: 'p1' });
+    renderLobby();
+    expect(screen.getByTestId('force-start-button')).toBeInTheDocument();
+  });
+
+  it('NÃO exibe botão quando sala está cheia (ready==maxPlayers)', () => {
+    const session = {
+      ...makeSession(),
+      maxPlayers: 3 as const,
+      players: [
+        { id: 'p1', name: 'Alice', score: 0, position: 0, isConnected: true },
+        { id: 'p2', name: 'Bob',   score: 0, position: 0, isConnected: true },
+        { id: 'p3', name: 'Carol', score: 0, position: 0, isConnected: true },
+      ],
+      lobbyReadyPlayers: ['p1', 'p2', 'p3'],
+    };
+    useGameStore.setState({ session, myPlayerId: 'p1' });
+    renderLobby();
+    expect(screen.queryByTestId('force-start-button')).not.toBeInTheDocument();
+  });
+
+  it('clicar no botão emite LOBBY_FORCE_START', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    const session = {
+      ...makeSession(),
+      maxPlayers: 4 as const,
+      players: [
+        { id: 'p1', name: 'Alice', score: 0, position: 0, isConnected: true },
+        { id: 'p2', name: 'Bob',   score: 0, position: 0, isConnected: true },
+      ],
+      lobbyReadyPlayers: ['p1', 'p2'],
+    };
+    useGameStore.setState({ session, myPlayerId: 'p1' });
+    renderLobby();
+    fireEvent.click(screen.getByTestId('force-start-button'));
+    expect(socket.emit).toHaveBeenCalledWith(
+      EVENTS.LOBBY_FORCE_START,
+      { sessionId: 'session-1', playerId: 'p1' },
+    );
+  });
+
+  it('exibe progresso de votos ao receber LOBBY_FORCE_START_PROGRESS', () => {
+    const session = {
+      ...makeSession(),
+      maxPlayers: 4 as const,
+      players: [
+        { id: 'p1', name: 'Alice', score: 0, position: 0, isConnected: true },
+        { id: 'p2', name: 'Bob',   score: 0, position: 0, isConnected: true },
+        { id: 'p3', name: 'Carol', score: 0, position: 0, isConnected: true },
+      ],
+      lobbyReadyPlayers: ['p1', 'p2', 'p3'],
+    };
+    useGameStore.setState({ session, myPlayerId: 'p1' });
+    renderLobby();
+
+    act(() => {
+      socketOnHandlers[EVENTS.LOBBY_FORCE_START_PROGRESS]?.forEach((h) =>
+        h({ sessionId: 'session-1', votes: 2, needed: 3 }),
+      );
+    });
+
+    expect(screen.getByTestId('force-start-button')).toHaveTextContent('2/3');
+  });
+
   // P1 entra antes dos demais — store tem só ele; cada GAME_STATE broadcast deve
   // atualizar a store para que P1 veja todos os peões ao entrar no tabuleiro (2–4 jogadores)
   it.each([2, 3, 4])(

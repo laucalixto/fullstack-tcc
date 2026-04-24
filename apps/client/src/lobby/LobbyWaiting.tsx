@@ -11,6 +11,9 @@ interface LobbyWaitingProps {
   sessionName?: string;
   maxPlayers?: number;
   autoStartAt?: number; // timestamp do servidor: Date.now() + delayMs
+  onForceStart?: () => void;
+  forceStartVotes?: number; // progresso recebido via LOBBY_FORCE_START_PROGRESS
+  forceStartNeeded?: number;
 }
 
 export function LobbyWaiting({
@@ -21,9 +24,19 @@ export function LobbyWaiting({
   sessionName,
   maxPlayers = DEFAULT_MAX_PLAYERS,
   autoStartAt,
+  onForceStart,
+  forceStartVotes,
+  forceStartNeeded,
 }: LobbyWaitingProps) {
   const canStart   = players.length >= 2;
   const emptySlots = maxPlayers - players.length;
+  // Voto "Iniciar agora" só em salas de 3+, quando há 2+ no lobby e ainda faltam slots.
+  const showForceStart =
+    !autoStartAt &&
+    maxPlayers >= 3 &&
+    players.length >= 2 &&
+    players.length < maxPlayers &&
+    !!onForceStart;
 
   const [countdown, setCountdown] = useState(0);
 
@@ -148,6 +161,24 @@ export function LobbyWaiting({
                 >
                   Iniciar Partida
                 </button>
+              </div>
+            )}
+
+            {showForceStart && (
+              <div className="mt-10 flex flex-col items-center gap-3">
+                <button
+                  data-testid="force-start-button"
+                  onClick={onForceStart}
+                  className="group relative inline-flex items-center justify-center px-10 py-3 font-black uppercase tracking-[0.2em] text-white bg-primary-container rounded-xl overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-lg shadow-primary/20"
+                >
+                  Iniciar agora
+                  {forceStartNeeded !== undefined && forceStartVotes !== undefined && (
+                    <span className="ml-3 text-xs opacity-80">({forceStartVotes}/{forceStartNeeded})</span>
+                  )}
+                </button>
+                <p className="text-xs text-secondary max-w-md text-center">
+                  Todos no lobby precisam confirmar. Jogadores que ainda não chegaram serão removidos.
+                </p>
               </div>
             )}
           </div>

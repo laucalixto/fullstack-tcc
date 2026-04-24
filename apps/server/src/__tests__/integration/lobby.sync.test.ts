@@ -144,6 +144,90 @@ describe('lobby sync — integração', () => {
     expect(begin.sessionId).toBe(sessionId);
   }, 10000);
 
+  // ── Fase 3: LOBBY_FORCE_START ────────────────────────────────────────────────
+  //
+  // O socket `creator` abaixo apenas emite ROOM_CREATE para instanciar a sala
+  // no teste. Ele não participa do início — esse cabe exclusivamente aos
+  // jogadores presentes no lobby (voto unânime) ou ao auto-start quando a sala
+  // enche. Nenhuma lógica desse fluxo depende de um facilitador em runtime.
+
+  it('voto unânime de LOBBY_FORCE_START inicia com subset e dropa ausentes', async () => {
+    const creator = await connect();
+    const p1 = await connect();
+    const p2 = await connect();
+    const p3 = await connect();
+
+    const { id: sessionId, pin } = await createRoom(creator, 4); // sala de 4
+    const p1Id = await joinRoom(p1, pin);
+    const p2Id = await joinRoom(p2, pin);
+    const p3Id = await joinRoom(p3, pin); // P4 nunca vai entrar
+
+    p1.emit(EVENTS.LOBBY_READY, { sessionId, playerId: p1Id });
+    p2.emit(EVENTS.LOBBY_READY, { sessionId, playerId: p2Id });
+    p3.emit(EVENTS.LOBBY_READY, { sessionId, playerId: p3Id });
+
+    await new Promise((r) => setTimeout(r, 150));
+
+    p1.emit(EVENTS.LOBBY_FORCE_START, { sessionId, playerId: p1Id });
+    p2.emit(EVENTS.LOBBY_FORCE_START, { sessionId, playerId: p2Id });
+
+    const [starting] = await Promise.all([
+      waitFor<{ sessionId: string; autoStartAt: number }>(p1, EVENTS.GAME_STARTING, 3000),
+      Promise.resolve(p3.emit(EVENTS.LOBBY_FORCE_START, { sessionId, playerId: p3Id })),
+    ]);
+    expect(starting.sessionId).toBe(sessionId);
+  }, 10000);
+
+  it('jogador no CharacterSelect recebe PLAYER_DROPPED no voto unânime', async () => {
+    const creator = await connect();
+    const p1 = await connect();
+    const p2 = await connect();
+    const pAbsent = await connect();
+
+    const { id: sessionId, pin } = await createRoom(creator, 3); // sala de 3
+    const p1Id = await joinRoom(p1, pin);
+    const p2Id = await joinRoom(p2, pin);
+    const pAbsentId = await joinRoom(pAbsent, pin); // entrou mas não foi ao lobby
+
+    p1.emit(EVENTS.LOBBY_READY, { sessionId, playerId: p1Id });
+    p2.emit(EVENTS.LOBBY_READY, { sessionId, playerId: p2Id });
+    await new Promise((r) => setTimeout(r, 150));
+
+    const [dropped] = await Promise.all([
+      waitFor<{ sessionId: string; playerId: string; reason: string }>(pAbsent, EVENTS.PLAYER_DROPPED, 3000),
+      Promise.resolve(p1.emit(EVENTS.LOBBY_FORCE_START, { sessionId, playerId: p1Id })),
+      Promise.resolve(p2.emit(EVENTS.LOBBY_FORCE_START, { sessionId, playerId: p2Id })),
+    ]);
+
+    expect(dropped.sessionId).toBe(sessionId);
+    expect(dropped.playerId).toBe(pAbsentId);
+    expect(dropped.reason).toBe('FORCE_START');
+  }, 10000);
+
+  it('LOBBY_FORCE_START emite progresso parcial aos presentes', async () => {
+    const creator = await connect();
+    const p1 = await connect();
+    const p2 = await connect();
+    const p3 = await connect();
+
+    const { id: sessionId, pin } = await createRoom(creator, 4);
+    const p1Id = await joinRoom(p1, pin);
+    const p2Id = await joinRoom(p2, pin);
+    await joinRoom(p3, pin);
+
+    p1.emit(EVENTS.LOBBY_READY, { sessionId, playerId: p1Id });
+    p2.emit(EVENTS.LOBBY_READY, { sessionId, playerId: p2Id });
+    await new Promise((r) => setTimeout(r, 150));
+
+    const [progress] = await Promise.all([
+      waitFor<{ sessionId: string; votes: number; needed: number }>(p2, EVENTS.LOBBY_FORCE_START_PROGRESS, 3000),
+      Promise.resolve(p1.emit(EVENTS.LOBBY_FORCE_START, { sessionId, playerId: p1Id })),
+    ]);
+
+    expect(progress.votes).toBe(1);
+    expect(progress.needed).toBe(2);
+  }, 8000);
+
   it('PLAYER_GAME_READY de apenas um NÃO dispara GAME_BEGIN', async () => {
     const fac = await connect();
     const p1  = await connect();
