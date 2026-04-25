@@ -27,16 +27,16 @@ export async function buildTiles(
   scene: THREE.Scene,
   theme: BoardTheme,
   assets: AssetLoader,
-): Promise<void> {
+): Promise<THREE.Object3D[]> {
   if (theme.tile.url) {
-    await buildTilesFromGLTF(scene, theme, assets);
-  } else {
-    buildTilesProcedural(scene, theme);
+    return buildTilesFromGLTF(scene, theme, assets);
   }
+  return buildTilesProcedural(scene, theme);
 }
 
-function buildTilesProcedural(scene: THREE.Scene, theme: BoardTheme): void {
+function buildTilesProcedural(scene: THREE.Scene, theme: BoardTheme): THREE.Object3D[] {
   const tileGeo = new THREE.BoxGeometry(1, 0.3, 1);
+  const tiles: THREE.Object3D[] = [];
   for (const tile of BOARD_PATH) {
     let color: THREE.Color;
     if (theme.tile.useProceduralColors) {
@@ -51,21 +51,26 @@ function buildTilesProcedural(scene: THREE.Scene, theme: BoardTheme): void {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
+    tiles.push(mesh);
   }
+  return tiles;
 }
 
 async function buildTilesFromGLTF(
   scene: THREE.Scene,
   theme: BoardTheme,
   assets: AssetLoader,
-): Promise<void> {
+): Promise<THREE.Object3D[]> {
   const url = theme.tile.url!;
   const template = await assets.loadGLTF(url, 'tile');
   const s = theme.tile.scale;
+  const tiles: THREE.Object3D[] = [];
   for (const tile of BOARD_PATH) {
-    const clone = template.clone() as THREE.Group & { traverse: THREE.Group['traverse'] };
+    const clone = template.clone() as THREE.Group;
     clone.position.set(tile.x, tile.y, tile.z);
     clone.scale.set(s, s, s);
     scene.add(clone);
+    tiles.push(clone);
   }
+  return tiles;
 }

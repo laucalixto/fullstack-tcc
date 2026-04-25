@@ -1,13 +1,20 @@
 import * as THREE from 'three';
 import type { BoardTheme } from '../theme/boardTheme';
 
+export interface LightingRefs {
+  ambient: THREE.AmbientLight;
+  sun: THREE.DirectionalLight;
+  fog: THREE.Fog;
+}
+
 /**
  * Aplica iluminação, fog e background ao scene a partir do tema.
- * Retorna um cleanup opcional (hoje no-op — luzes persistem com a cena).
+ * Retorna refs para permitir tuning em realtime (usado pelo /preview GUI).
  */
-export function setupLighting(scene: THREE.Scene, theme: BoardTheme): void {
+export function setupLighting(scene: THREE.Scene, theme: BoardTheme): LightingRefs {
   scene.background = new THREE.Color(theme.background.color);
-  scene.fog = new THREE.Fog(theme.background.fog.color, theme.background.fog.near, theme.background.fog.far);
+  const fog = new THREE.Fog(theme.background.fog.color, theme.background.fog.near, theme.background.fog.far);
+  scene.fog = fog;
 
   const ambient = new THREE.AmbientLight(0xffffff, theme.lighting.ambientIntensity);
   scene.add(ambient);
@@ -24,4 +31,6 @@ export function setupLighting(scene: THREE.Scene, theme: BoardTheme): void {
   sun.shadow.camera.top = 15;
   sun.shadow.camera.bottom = -15;
   scene.add(sun);
+
+  return { ambient, sun, fog };
 }

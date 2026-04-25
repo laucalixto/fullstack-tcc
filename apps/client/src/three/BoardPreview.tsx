@@ -4,12 +4,24 @@ import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js
 import GUI from 'lil-gui';
 import { createScene as initThreeScene } from './scene/createScene';
 import { DEFAULT_THEME, type BoardTheme } from './theme/boardTheme';
+import { gameBus } from './EventBus';
+import type { Player } from '@safety-board/shared';
 
 type Win = Record<string, unknown>;
+
+interface PreviewHandles {
+  setTileScale: (s: number) => void;
+  setAmbientIntensity: (v: number) => void;
+  setSunIntensity: (v: number) => void;
+  setFogNear: (v: number) => void;
+  setFogFar:  (v: number) => void;
+  setPawnScale: (s: number) => void;
+}
 
 function getCamera()   { return (window as unknown as Win).__previewCamera__   as THREE.PerspectiveCamera | undefined; }
 function getControls() { return (window as unknown as Win).__previewControls__ as OrbitControls          | undefined; }
 function getTheme()    { return (window as unknown as Win).__previewTheme__    as BoardTheme             | undefined; }
+function getHandles()  { return (window as unknown as Win).__previewHandles__  as PreviewHandles         | undefined; }
 
 export function BoardPreview() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -21,6 +33,16 @@ export function BoardPreview() {
     // Cópia mutável do tema para o GUI — alterações ficam in-memory no preview.
     const theme: BoardTheme = JSON.parse(JSON.stringify(DEFAULT_THEME));
     const cleanup = initThreeScene(container, theme);
+
+    // Spawn de 4 peões dummy para visualizar escala/cor (só no preview).
+    const dummyPlayers: Player[] = [
+      { id: 'preview-1', name: 'Alice',  position: 0, score: 0, isConnected: true },
+      { id: 'preview-2', name: 'Bob',    position: 5, score: 0, isConnected: true },
+      { id: 'preview-3', name: 'Carol',  position: 15, score: 0, isConnected: true },
+      { id: 'preview-4', name: 'Dan',    position: 25, score: 0, isConnected: true },
+    ];
+    // Aguarda 1 frame para garantir que createScene terminou de montar.
+    setTimeout(() => gameBus.emit('players:sync', dummyPlayers), 50);
 
     const gui = new GUI({ title: 'Preview Controls' });
 
@@ -55,27 +77,35 @@ export function BoardPreview() {
     const ty = folderTgt.add(tgt, 'y').decimals(2).disable().name('Y');
     const tz = folderTgt.add(tgt, 'z').decimals(2).disable().name('Z');
 
-    // ── Tile ────────────────────────────────────────────────────────────────
+    // ── Tile (realtime via handles) ─────────────────────────────────────────
     const tileFolder = gui.addFolder('Tile');
-    tileFolder.add(theme.tile, 'scale', 0.1, 3, 0.05).name('scale (live)').onChange(() => {
-      // nota: mudança em tile já renderizado exige reinicializar a cena.
-      // Por simplicidade, o GUI só atualiza o tema; a próxima recarga aplica.
+    tileFolder.add(theme.tile, 'scale', 0.1, 3, 0.05).name('scale').onChange((v: number) => {
+      getHandles()?.setTileScale(v);
     });
-    tileFolder.add(theme.tile, 'useProceduralColors').name('procedural colors');
 
-    // ── Pawn ────────────────────────────────────────────────────────────────
+    // ── Pawn (realtime) ────────────────────────────────────────────────────
     const pawnFolder = gui.addFolder('Peão');
-    pawnFolder.add(theme.pawn, 'scale', 0.1, 3, 0.05).name('scale');
+    pawnFolder.add(theme.pawn, 'scale', 0.1, 3, 0.05).name('scale').onChange((v: number) => {
+      getHandles()?.setPawnScale(v);
+    });
 
-    // ── Lighting ────────────────────────────────────────────────────────────
+    // ── Lighting (realtime) ────────────────────────────────────────────────
     const lightFolder = gui.addFolder('Luzes');
-    lightFolder.add(theme.lighting, 'ambientIntensity', 0, 2, 0.05).name('ambient');
-    lightFolder.add(theme.lighting, 'sunIntensity',     0, 3, 0.05).name('sun');
+    lightFolder.add(theme.lighting, 'ambientIntensity', 0, 2, 0.05).name('ambient').onChange((v: number) => {
+      getHandles()?.setAmbientIntensity(v);
+    });
+    lightFolder.add(theme.lighting, 'sunIntensity', 0, 3, 0.05).name('sun').onChange((v: number) => {
+      getHandles()?.setSunIntensity(v);
+    });
 
-    // ── Fog ─────────────────────────────────────────────────────────────────
+    // ── Fog (realtime) ─────────────────────────────────────────────────────
     const fogFolder = gui.addFolder('Fog');
-    fogFolder.add(theme.background.fog, 'near', 0, 100, 1);
-    fogFolder.add(theme.background.fog, 'far',  0, 200, 1);
+    fogFolder.add(theme.background.fog, 'near', 0, 100, 1).onChange((v: number) => {
+      getHandles()?.setFogNear(v);
+    });
+    fogFolder.add(theme.background.fog, 'far', 0, 200, 1).onChange((v: number) => {
+      getHandles()?.setFogFar(v);
+    });
 
     // ── Export JSON do tema ─────────────────────────────────────────────────
     const themeActions = {

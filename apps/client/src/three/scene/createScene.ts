@@ -33,7 +33,7 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
   const scene = new THREE.Scene();
 
   // Lighting + background + fog (lê do tema)
-  setupLighting(scene, theme);
+  const lightRefs = setupLighting(scene, theme);
 
   // Camera
   const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 100);
@@ -59,9 +59,24 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
 
   // Tiles, chão, decorações — tile/ground/decoração podem ser assíncronos (glTF)
   // Não aguardamos aqui: preload centralizado é feito antes, em GameLoadingPage.
-  buildTiles(scene, theme, assetManager);
+  const tilesRefHolder: { tiles: THREE.Object3D[] } = { tiles: [] };
+  buildTiles(scene, theme, assetManager).then((ts) => { tilesRefHolder.tiles = ts; });
   buildGround(scene, theme, assetManager);
   buildDecorations(scene, theme, assetManager);
+
+  // Handles em dev: permitem ao /preview GUI aplicar tuning em realtime.
+  if (import.meta.env.DEV) {
+    (window as unknown as Record<string, unknown>).__previewHandles__ = {
+      setTileScale(s: number) {
+        for (const t of tilesRefHolder.tiles) t.scale.set(s, s, s);
+      },
+      setAmbientIntensity(v: number) { lightRefs.ambient.intensity = v; },
+      setSunIntensity(v: number)     { lightRefs.sun.intensity = v; },
+      setFogNear(v: number) { lightRefs.fog.near = v; },
+      setFogFar(v: number)  { lightRefs.fog.far = v; },
+      setPawnScale(s: number) { pawnManager.setGlobalScale(s); },
+    };
+  }
 
   // Dado
   const dicePhysics = new DicePhysics(scene);
@@ -101,6 +116,7 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
       delete (window as unknown as Record<string, unknown>).__previewControls__;
       delete (window as unknown as Record<string, unknown>).__previewScene__;
       delete (window as unknown as Record<string, unknown>).__previewTheme__;
+      delete (window as unknown as Record<string, unknown>).__previewHandles__;
     }
     window.removeEventListener('resize', onResize);
     unbindEvents();

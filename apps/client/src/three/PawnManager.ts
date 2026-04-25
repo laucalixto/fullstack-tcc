@@ -163,4 +163,11 @@ export class PawnManager {
   getPawnCount(): number {
     return this.pawns.size;
   }
+
+  /** Aplica escala uniforme a todos os peões (usado pelo preview em realtime). */
+  setGlobalScale(s: number): void {
+    for (const pawn of this.pawns.values()) {
+      pawn.scale.set(s, s, s);
+    }
+  }
 }
