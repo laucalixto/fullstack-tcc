@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { BOARD_PATH } from '@safety-board/shared';
 import { CameraController } from '../camera';
 import { PawnManager } from '../PawnManager';
 import { DicePhysics } from '../dice/DicePhysics';
@@ -10,7 +9,7 @@ import { buildDecorations } from '../builders/decorationsBuilder';
 import { setupLighting } from './lighting';
 import { startAnimationLoop } from './animationLoop';
 import { bindGameEvents } from './eventBindings';
-import { DEFAULT_THEME } from '../theme/boardTheme';
+import { DEFAULT_THEME, resolveLayout } from '../theme/boardTheme';
 import type { BoardTheme } from '../theme/boardTheme';
 import { assetManager } from '../assets/AssetManager';
 
@@ -32,8 +31,8 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
   // Scene
   const scene = new THREE.Scene();
 
-  // Lighting + background + fog (lê do tema)
-  const lightRefs = setupLighting(scene, theme);
+  // Lighting + background + fog + tone mapping + environment (lê do tema)
+  const lightRefs = setupLighting(renderer, scene, theme);
 
   // Camera
   const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 100);
@@ -75,17 +74,37 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
       setFogNear(v: number) { lightRefs.fog.near = v; },
       setFogFar(v: number)  { lightRefs.fog.far = v; },
       setPawnScale(s: number) { pawnManager.setGlobalScale(s); },
+      setToneMappingExposure(v: number) { renderer.toneMappingExposure = v; },
+      setToneMapping(name: 'none' | 'linear' | 'aces' | 'reinhard' | 'cineon') {
+        const map: Record<string, THREE.ToneMapping> = {
+          none:     THREE.NoToneMapping,
+          linear:   THREE.LinearToneMapping,
+          aces:     THREE.ACESFilmicToneMapping,
+          reinhard: THREE.ReinhardToneMapping,
+          cineon:   THREE.CineonToneMapping,
+        };
+        renderer.toneMapping = map[name] ?? THREE.ACESFilmicToneMapping;
+        // Materiais usando shader-based tone mapping precisam do flag para recompilar.
+        scene.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          const mat = mesh.material;
+          if (Array.isArray(mat)) mat.forEach((m) => { (m as THREE.Material).needsUpdate = true; });
+          else if (mat) (mat as THREE.Material).needsUpdate = true;
+        });
+      },
     };
   }
 
   // Dado
   const dicePhysics = new DicePhysics(scene, theme, assetManager);
 
-  // Event bindings (gameBus)
-  const activePos = new THREE.Vector3(BOARD_PATH[0].x, BOARD_PATH[0].y, BOARD_PATH[0].z);
+  // Event bindings (gameBus) — usa layout efetivo (custom do tema ou default).
+  const layout = resolveLayout(theme);
+  const activePos = new THREE.Vector3(layout[0].x, layout[0].y, layout[0].z);
   const unbindEvents = bindGameEvents({
     pawnManager,
     dicePhysics,
+    layout,
     cameraController,
     activePos,
     onDiceRollingChange: () => undefined, // reservado para expansão futura

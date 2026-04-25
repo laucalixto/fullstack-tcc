@@ -150,3 +150,28 @@ describe('boardTheme', () => {
     expect(urls).toContain('/textures/dice-base.png');
   });
 });
+
+// ─── boardLayout (Opção B) ────────────────────────────────────────────────────
+
+describe('boardTheme — resolveLayout', () => {
+  it('sem boardLayout no tema, resolveLayout retorna BOARD_PATH', async () => {
+    const { resolveLayout } = await import('../../three/theme/boardTheme');
+    const { BOARD_PATH } = await import('@safety-board/shared');
+    expect(resolveLayout(DEFAULT_THEME)).toEqual(BOARD_PATH);
+  });
+
+  it('com boardLayout no tema, resolveLayout retorna esse layout', async () => {
+    const { resolveLayout } = await import('../../three/theme/boardTheme');
+    const { BOARD_PATH } = await import('@safety-board/shared');
+    const customLayout = BOARD_PATH.map((t) => ({ ...t, x: t.x + 10 })); // shift X
+    const theme: BoardTheme = { ...DEFAULT_THEME, boardLayout: customLayout };
+    expect(resolveLayout(theme)).toBe(customLayout);
+  });
+
+  it('layout com tamanho diferente de BOARD_PATH lança erro', async () => {
+    const { resolveLayout } = await import('../../three/theme/boardTheme');
+    const shortLayout = [{ index: 0, x: 0, y: 0, z: 0 }];
+    const theme: BoardTheme = { ...DEFAULT_THEME, boardLayout: shortLayout };
+    expect(() => resolveLayout(theme)).toThrow(/40 tiles|tamanho/i);
+  });
+});

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { BOARD_PATH, tileCategory } from '@safety-board/shared';
+import { tileCategory } from '@safety-board/shared';
 import { computeTileHSL } from '../tileColors';
-import { resolveTileUrl, type BoardTheme, type TileAtlasConfig } from '../theme/boardTheme';
+import { resolveLayout, resolveTileUrl, type BoardTheme, type TileAtlasConfig } from '../theme/boardTheme';
 
 // Grupos de tiles seguem a divisão do BOARD_PATH (10 em 10).
 function tileGroup(index: number): number {
@@ -45,8 +45,9 @@ export async function buildTiles(
     }
   }
 
+  const layout = resolveLayout(theme);
   const tiles: THREE.Object3D[] = [];
-  for (const tile of BOARD_PATH) {
+  for (const tile of layout) {
     const cat = tileCategory(tile.index);
     const url = resolveTileUrl(theme, tile.index, cat);
 

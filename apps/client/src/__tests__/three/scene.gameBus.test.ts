@@ -67,8 +67,30 @@ vi.mock('three', () => {
     Clock: vi.fn().mockImplementation(() => ({ getDelta: vi.fn().mockReturnValue(0) })),
     PCFSoftShadowMap: 1,
     PCFShadowMap: 2,
+    PMREMGenerator: vi.fn().mockImplementation(() => ({
+      fromScene: vi.fn(() => ({ texture: { __envTex: true } })),
+      fromEquirectangular: vi.fn(() => ({ texture: { __envTex: true } })),
+      compileEquirectangularShader: vi.fn(),
+      dispose: vi.fn(),
+    })),
+    PlaneGeometry: vi.fn().mockImplementation((w, h) => ({ __pw: w, __ph: h })),
+    MeshBasicMaterial: vi.fn().mockImplementation((opts) => ({ __opts: opts })),
+    SRGBColorSpace: 'srgb',
+    NoToneMapping:           0,
+    LinearToneMapping:       1,
+    ACESFilmicToneMapping:   2,
+    ReinhardToneMapping:     3,
+    CineonToneMapping:       4,
   };
 });
+
+vi.mock('three/examples/jsm/environments/RoomEnvironment.js', () => ({
+  RoomEnvironment: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock('three/examples/jsm/loaders/RGBELoader.js', () => ({
+  RGBELoader: vi.fn().mockImplementation(() => ({ load: vi.fn() })),
+}));
 
 vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
   OrbitControls: vi.fn().mockImplementation(() => ({

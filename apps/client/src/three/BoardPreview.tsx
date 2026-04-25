@@ -6,6 +6,7 @@ import { createScene as initThreeScene } from './scene/createScene';
 import { DEFAULT_THEME, type BoardTheme } from './theme/boardTheme';
 import { gameBus } from './EventBus';
 import type { Player } from '@safety-board/shared';
+import { LAYOUTS } from './layouts';
 
 type Win = Record<string, unknown>;
 
@@ -16,6 +17,8 @@ interface PreviewHandles {
   setFogNear: (v: number) => void;
   setFogFar:  (v: number) => void;
   setPawnScale: (s: number) => void;
+  setToneMappingExposure: (v: number) => void;
+  setToneMapping: (name: 'none' | 'linear' | 'aces' | 'reinhard' | 'cineon') => void;
 }
 
 function getCamera()   { return (window as unknown as Win).__previewCamera__   as THREE.PerspectiveCamera | undefined; }
@@ -30,21 +33,46 @@ export function BoardPreview() {
     const container = containerRef.current;
     if (!container) return;
 
-    // Cópia mutável do tema para o GUI — alterações ficam in-memory no preview.
-    const theme: BoardTheme = JSON.parse(JSON.stringify(DEFAULT_THEME));
-    const cleanup = initThreeScene(container, theme);
+    // Estado mutável compartilhado: layout selecionado + cleanup atual.
+    const previewState = {
+      layoutName: 'classic',
+      cleanup: null as (() => void) | null,
+      pawnsTimer: 0 as ReturnType<typeof setTimeout> | 0,
+    };
 
     // Spawn de 4 peões dummy para visualizar escala/cor (só no preview).
     const dummyPlayers: Player[] = [
-      { id: 'preview-1', name: 'Alice',  position: 0, score: 0, isConnected: true },
-      { id: 'preview-2', name: 'Bob',    position: 5, score: 0, isConnected: true },
-      { id: 'preview-3', name: 'Carol',  position: 15, score: 0, isConnected: true },
-      { id: 'preview-4', name: 'Dan',    position: 25, score: 0, isConnected: true },
+      { id: 'preview-1', name: 'Alice', position: 0,  score: 0, isConnected: true },
+      { id: 'preview-2', name: 'Bob',   position: 5,  score: 0, isConnected: true },
+      { id: 'preview-3', name: 'Carol', position: 15, score: 0, isConnected: true },
+      { id: 'preview-4', name: 'Dan',   position: 25, score: 0, isConnected: true },
     ];
-    // Aguarda 1 frame para garantir que createScene terminou de montar.
-    setTimeout(() => gameBus.emit('players:sync', dummyPlayers), 50);
+
+    function buildScene(layoutName: string) {
+      previewState.cleanup?.();
+      if (previewState.pawnsTimer) clearTimeout(previewState.pawnsTimer);
+
+      // Cópia mutável do tema com layout escolhido.
+      const theme: BoardTheme = JSON.parse(JSON.stringify(DEFAULT_THEME));
+      theme.boardLayout = LAYOUTS[layoutName] ?? LAYOUTS.classic;
+
+      previewState.cleanup = initThreeScene(container!, theme);
+      previewState.layoutName = layoutName;
+      // Aguarda 1 frame para garantir que createScene terminou de montar.
+      previewState.pawnsTimer = setTimeout(() => gameBus.emit('players:sync', dummyPlayers), 50);
+    }
+
+    buildScene(previewState.layoutName);
 
     const gui = new GUI({ title: 'Preview Controls' });
+
+    // ── Layout (Opção B) ────────────────────────────────────────────────────
+    const layoutFolder = gui.addFolder('Layout (caminho do tabuleiro)');
+    const layoutNames = Object.keys(LAYOUTS);
+    layoutFolder
+      .add({ layout: previewState.layoutName }, 'layout', layoutNames)
+      .name('escolher')
+      .onChange((name: string) => buildScene(name));
 
     // ── Câmera: helper de leitura de posição (mantido) ──────────────────────
     const cameraFolder = gui.addFolder('Câmera (debug)');
@@ -65,7 +93,6 @@ export function BoardPreview() {
     };
     cameraFolder.add(cameraActions, 'Ler posição atual');
 
-    // Live display de posição
     const pos = { x: 0, y: 0, z: 0 };
     const tgt = { x: 0, y: 0, z: 0 };
     const folderPos = cameraFolder.addFolder('Câmera position (live)').close();
@@ -79,38 +106,52 @@ export function BoardPreview() {
 
     // ── Tile (realtime via handles) ─────────────────────────────────────────
     const tileFolder = gui.addFolder('Tile');
-    tileFolder.add(theme.tile, 'scale', 0.1, 3, 0.05).name('scale').onChange((v: number) => {
+    tileFolder.add({ scale: 1 }, 'scale', 0.1, 3, 0.05).name('scale').onChange((v: number) => {
       getHandles()?.setTileScale(v);
     });
 
-    // ── Pawn (realtime) ────────────────────────────────────────────────────
+    // ── Pawn ────────────────────────────────────────────────────────────────
     const pawnFolder = gui.addFolder('Peão');
-    pawnFolder.add(theme.pawn, 'scale', 0.1, 3, 0.05).name('scale').onChange((v: number) => {
+    pawnFolder.add({ scale: 1 }, 'scale', 0.1, 3, 0.05).name('scale').onChange((v: number) => {
       getHandles()?.setPawnScale(v);
     });
 
-    // ── Lighting (realtime) ────────────────────────────────────────────────
+    // ── Lighting ────────────────────────────────────────────────────────────
     const lightFolder = gui.addFolder('Luzes');
-    lightFolder.add(theme.lighting, 'ambientIntensity', 0, 2, 0.05).name('ambient').onChange((v: number) => {
+    lightFolder.add({ ambientIntensity: 0.5 }, 'ambientIntensity', 0, 2, 0.05).name('ambient').onChange((v: number) => {
       getHandles()?.setAmbientIntensity(v);
     });
-    lightFolder.add(theme.lighting, 'sunIntensity', 0, 3, 0.05).name('sun').onChange((v: number) => {
+    lightFolder.add({ sunIntensity: 1.2 }, 'sunIntensity', 0, 3, 0.05).name('sun').onChange((v: number) => {
       getHandles()?.setSunIntensity(v);
     });
 
-    // ── Fog (realtime) ─────────────────────────────────────────────────────
+    // ── Tone mapping / exposição ────────────────────────────────────────────
+    const toneFolder = gui.addFolder('Tone mapping');
+    toneFolder
+      .add({ exposure: 1.0 }, 'exposure', 0, 3, 0.05)
+      .name('exposure')
+      .onChange((v: number) => { getHandles()?.setToneMappingExposure(v); });
+    toneFolder
+      .add({ mode: 'aces' }, 'mode', ['none', 'linear', 'aces', 'reinhard', 'cineon'])
+      .name('mode')
+      .onChange((name: 'none' | 'linear' | 'aces' | 'reinhard' | 'cineon') => {
+        getHandles()?.setToneMapping(name);
+      });
+
+    // ── Fog ─────────────────────────────────────────────────────────────────
     const fogFolder = gui.addFolder('Fog');
-    fogFolder.add(theme.background.fog, 'near', 0, 100, 1).onChange((v: number) => {
+    fogFolder.add({ near: 30 }, 'near', 0, 100, 1).onChange((v: number) => {
       getHandles()?.setFogNear(v);
     });
-    fogFolder.add(theme.background.fog, 'far', 0, 200, 1).onChange((v: number) => {
+    fogFolder.add({ far: 60 }, 'far', 0, 200, 1).onChange((v: number) => {
       getHandles()?.setFogFar(v);
     });
 
     // ── Export JSON do tema ─────────────────────────────────────────────────
     const themeActions = {
       'Exportar tema (JSON)': () => {
-        const live = getTheme() ?? theme;
+        const live = getTheme();
+        if (!live) return;
         const json = JSON.stringify(live, null, 2);
         console.info('[BoardPreview] tema atual:\n' + json);
         navigator.clipboard.writeText(json).catch(() => {});
@@ -133,7 +174,8 @@ export function BoardPreview() {
     tick();
 
     return () => {
-      cleanup();
+      previewState.cleanup?.();
+      if (previewState.pawnsTimer) clearTimeout(previewState.pawnsTimer);
       cancelAnimationFrame(rafId);
       gui.destroy();
     };

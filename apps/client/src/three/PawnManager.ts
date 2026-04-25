@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import type { TilePosition } from '@safety-board/shared';
 import { BOARD_PATH } from '@safety-board/shared';
-import { DEFAULT_THEME, type BoardTheme } from './theme/boardTheme';
+import { DEFAULT_THEME, resolveLayout, type BoardTheme } from './theme/boardTheme';
 import type { AssetLoader } from './builders/tileBuilder';
 
 const FALLBACK_PAWN_COLORS = [0xe63946, 0x457b9d, 0x2a9d8f, 0xf4a261] as const;
@@ -48,12 +49,18 @@ export class PawnManager {
   private readonly scene: THREE.Scene;
   private readonly theme: BoardTheme;
   private readonly assets: AssetLoader | null;
+  private readonly layout: TilePosition[];
   private gltfTemplate: THREE.Group | null = null;
 
   constructor(scene: THREE.Scene, theme: BoardTheme = DEFAULT_THEME, assets: AssetLoader | null = null) {
     this.scene = scene;
     this.theme = theme;
     this.assets = assets;
+    // Layout efetivo (custom do tema ou BOARD_PATH default).
+    // Tolerante a temas truncados em testes que não passam todos os campos.
+    this.layout = (theme.boardLayout || theme === DEFAULT_THEME)
+      ? resolveLayout(theme)
+      : BOARD_PATH;
 
     // Preload assíncrono do template glTF quando configurado.
     if (theme.pawn.url && assets) {
@@ -92,7 +99,7 @@ export class PawnManager {
   movePawn(playerId: string, tileIndex: number): void {
     const pawn = this.pawns.get(playerId);
     if (!pawn) return;
-    const tile = BOARD_PATH[tileIndex];
+    const tile = this.layout[tileIndex];
     const idx = this.colorIndexes.get(playerId) ?? 0;
     const [ox, oz] = TILE_OFFSETS[idx % TILE_OFFSETS.length];
     pawn.position.set(tile.x + ox, tile.y + PAWN_Y_OFFSET, tile.z + oz);
@@ -121,8 +128,8 @@ export class PawnManager {
       if (!pawn) { this.animations.delete(playerId); continue; }
 
       const step     = anim.steps[anim.stepIdx];
-      const fromTile = BOARD_PATH[step.from];
-      const toTile   = BOARD_PATH[step.to];
+      const fromTile = this.layout[step.from];
+      const toTile   = this.layout[step.to];
       const colorIdx = this.colorIndexes.get(playerId) ?? 0;
       const [ox, oz] = TILE_OFFSETS[colorIdx % TILE_OFFSETS.length];
 

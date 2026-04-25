@@ -5,7 +5,7 @@
 // Convenção: 1 unit Three.js = 1 metro. scale=1.0 = modelo exportado em
 // metros do Blender. Veja _docs_refs/MODELING.md.
 
-import type { TileCategory } from '@safety-board/shared';
+import { BOARD_PATH, type TileCategory, type TilePosition } from '@safety-board/shared';
 
 /**
  * Atlas de ícones aplicado no topo de cada tile (opção A: 40 ícones únicos).
@@ -74,10 +74,32 @@ export interface DecorationConfig {
   scale?: number;
 }
 
+export type ToneMapping = 'none' | 'linear' | 'aces' | 'reinhard' | 'cineon';
+
+/**
+ * Environment map para iluminação PBR realista.
+ * - 'none' (default): só luzes diretas (look antigo).
+ * - 'room': RoomEnvironment built-in do Three.js — leve, sem arquivo externo,
+ *   melhora reflexões de PBR substancialmente.
+ * - 'hdr': carrega arquivo .hdr (RGBELoader). Forneça `url` apontando para um
+ *   .hdr em apps/client/public/env/.
+ */
+export interface EnvironmentConfig {
+  type: 'none' | 'room' | 'hdr';
+  url?: string;
+  intensity?: number;
+}
+
 export interface LightingConfig {
   ambientIntensity: number;
   sunIntensity: number;
   sunPosition: [number, number, number];
+  /** Tone mapping aplicado pelo renderer. Default 'aces' = visual cinematográfico. */
+  toneMapping?: ToneMapping;
+  /** Multiplicador de exposição do tone mapping. Default 1.0. */
+  toneMappingExposure?: number;
+  /** Environment map para reflexões PBR. Default { type: 'none' }. */
+  environment?: EnvironmentConfig;
 }
 
 export interface BackgroundConfig {
@@ -93,6 +115,12 @@ export interface BoardTheme {
   pawn:       PawnThemeConfig;
   dice: DiceThemeConfig;
   decorations: DecorationConfig[];
+  /**
+   * Layout opcional com 40 posições XYZ. Se omitido, usa BOARD_PATH do shared.
+   * Cliente-only: server nunca lê coords, só índices. Permite criar layouts
+   * alternativos (formatos de caminho diferentes) sem afetar a lógica do jogo.
+   */
+  boardLayout?: TilePosition[];
 }
 
 export const DEFAULT_THEME: BoardTheme = {
@@ -104,6 +132,9 @@ export const DEFAULT_THEME: BoardTheme = {
     ambientIntensity: 0.5,
     sunIntensity:     1.2,
     sunPosition:      [10, 20, 10],
+    toneMapping:      'aces',
+    toneMappingExposure: 1.0,
+    environment:      { type: 'room', intensity: 1.0 },
   },
   tile: {
     scale: 1.0,
@@ -169,4 +200,19 @@ export function resolveTileUrl(theme: BoardTheme, index: number, category: TileC
   return theme.tile.urlByIndex?.[index]
     ?? theme.tile.urlByCategory?.[category]
     ?? theme.tile.url;
+}
+
+/**
+ * Resolve o layout efetivo: tema → BOARD_PATH default. Valida tamanho.
+ * Lança erro se o boardLayout custom não tiver exatamente BOARD_PATH.length tiles
+ * (lógica do servidor depende de 40 índices fixos com responsabilidades específicas).
+ */
+export function resolveLayout(theme: BoardTheme): TilePosition[] {
+  const layout = theme.boardLayout ?? BOARD_PATH;
+  if (layout.length !== BOARD_PATH.length) {
+    throw new Error(
+      `boardLayout deve ter exatamente ${BOARD_PATH.length} tiles (tamanho recebido: ${layout.length})`,
+    );
+  }
+  return layout;
 }

@@ -245,4 +245,29 @@ describe('tileBuilder', () => {
     // Tiles não-quiz devem ser BoxGeometry procedural — verifica que BoxGeometry foi chamada.
     expect(THREE.BoxGeometry).toHaveBeenCalled();
   });
+
+  // ─── Layout customizado (Opção B) ─────────────────────────────────────────
+
+  it('usa coordenadas do theme.boardLayout quando definido', async () => {
+    const scene = makeFakeScene();
+    const positionCalls: Array<[number, number, number]> = [];
+    // O mock de Mesh substitui position com objeto que captura set()
+    const THREE = await import('three');
+    vi.mocked(THREE.Mesh).mockImplementation((geo: unknown, mat: unknown) => ({
+      geometry: geo, material: mat,
+      position: { set: vi.fn((x: number, y: number, z: number) => { positionCalls.push([x, y, z]); }), x: 0, y: 0, z: 0 },
+      rotation: { set: vi.fn(), x: 0, y: 0, z: 0 },
+      castShadow: false, receiveShadow: false,
+    }) as unknown as import('three').Mesh);
+
+    const customLayout = Array.from({ length: 40 }, (_, i) => ({ index: i, x: 100 + i, y: 50, z: 200 }));
+    await buildTiles(
+      scene,
+      { ...DEFAULT_THEME, boardLayout: customLayout, tile: { ...DEFAULT_THEME.tile, atlas: undefined } },
+      { loadGLTF: vi.fn(), loadTexture: vi.fn() },
+    );
+    // Cada tile foi posicionado nas coords do customLayout
+    expect(positionCalls[0]).toEqual([100, 50, 200]);
+    expect(positionCalls[39]).toEqual([139, 50, 200]);
+  });
 });
