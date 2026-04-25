@@ -2,7 +2,7 @@
 
 Diretório servido estaticamente pelo Vite. URLs absolutas via `/models/arquivo.glb`.
 
-Veja **`apps/client/src/three/MODELING.md`** para convenções de escala, eixos,
+Veja **`_docs_refs/MODELING.md`** para convenções de escala, eixos,
 naming de meshes e fluxo de exportação do Blender.
 
 ## Como adicionar um modelo

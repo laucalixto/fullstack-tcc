@@ -56,7 +56,10 @@ vi.mock('three', () => {
       setTimeout(() => onLoad({ __fakeTexture: true }), 0);
     }
   }
-  return { Box3, Vector3, TextureLoader };
+  class CanvasTexture {
+    constructor(public canvas: unknown) {}
+  }
+  return { Box3, Vector3, TextureLoader, CanvasTexture };
 });
 
 import { AssetManager } from '../../three/assets/AssetManager';
@@ -86,6 +89,56 @@ describe('AssetManager', () => {
     const a = await mgr.loadTexture('/textures/wood.png');
     const b = await mgr.loadTexture('/textures/wood.png');
     expect(a).toBe(b);
+  });
+
+  it('loadTexture aceita .png e .jpg via TextureLoader', async () => {
+    const a = await mgr.loadTexture('/textures/foo.jpg');
+    const b = await mgr.loadTexture('/textures/foo.jpeg');
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+  });
+
+  it('loadTexture aceita .svg via fetch + canvas (CanvasTexture)', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="red"/></svg>'),
+    } as unknown as Response);
+
+    // jsdom Image: define onload sincronicamente quando src é setado
+    const origImage = globalThis.Image;
+    class FakeImage {
+      onload: (() => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      width = 64;
+      height = 64;
+      private _src = '';
+      set src(value: string) { this._src = value; setTimeout(() => this.onload?.(), 0); }
+      get src() { return this._src; }
+    }
+    (globalThis as unknown as { Image: typeof origImage }).Image = FakeImage as unknown as typeof origImage;
+    // jsdom: createObjectURL/revokeObjectURL stubs
+    if (!URL.createObjectURL) URL.createObjectURL = () => 'blob:fake';
+    if (!URL.revokeObjectURL) URL.revokeObjectURL = () => undefined;
+
+    try {
+      const tex = await mgr.loadTexture('/textures/icon.svg');
+      expect(tex).toBeDefined();
+      // SVG passa pelo fetch (não pelo TextureLoader): garante o caminho específico.
+      expect(fetchSpy).toHaveBeenCalledWith('/textures/icon.svg');
+    } finally {
+      (globalThis as unknown as { Image: typeof origImage }).Image = origImage;
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('loadTexture com .png NÃO chama fetch (vai pelo TextureLoader)', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    try {
+      await mgr.loadTexture('/textures/raster.png');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it('preloadAll resolve com array vazio (no-op)', async () => {

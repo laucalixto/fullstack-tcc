@@ -11,6 +11,17 @@ import { MemoryRouter } from 'react-router-dom';
 vi.mock('../../three/ThreeCanvas', () => ({ ThreeCanvas: () => <div /> }));
 vi.mock('../../three/GamePage',    () => ({ GamePage:    () => <div /> }));
 
+// Mock do AssetManager: o GameLoadingPage faz preloadAll com URLs reais (atlases
+// SVG) que jsdom não consegue carregar. Substituímos por no-op resolvido.
+vi.mock('../../three/assets/AssetManager', () => ({
+  assetManager: {
+    preloadAll: vi.fn().mockResolvedValue(undefined),
+    loadGLTF:    vi.fn(),
+    loadTexture: vi.fn(),
+    dispose:     vi.fn(),
+  },
+}));
+
 const socketOnHandlers: Record<string, ((...args: unknown[]) => void)[]> = {};
 
 vi.mock('../../ws/socket', () => ({

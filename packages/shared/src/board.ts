@@ -139,3 +139,36 @@ export const TILE_EFFECTS: Record<number, TileEffectDefinition> = {
 export function isTileEffect(index: number): boolean {
   return index in TILE_EFFECTS;
 }
+
+// ─── Categoria de tile (UI) ──────────────────────────────────────────────────
+
+export type TileCategory =
+  | 'start'
+  | 'finish'
+  | 'quiz'
+  | 'accident'
+  | 'prevention'
+  | 'special-back'
+  | 'special-skip'
+  | 'neutral';
+
+/**
+ * Classifica um tile de acordo com sua responsabilidade no jogo.
+ * Usado pela UI 3D (atlas de textura, cor de borda, etc.) para identificar
+ * visualmente cada casa.
+ */
+export function tileCategory(index: number): TileCategory {
+  if (index === 0) return 'start';
+  if (index === BOARD_PATH.length - 1) return 'finish';
+  if (QUIZ_TILE_INDICES.has(index)) return 'quiz';
+  const effect = TILE_EFFECTS[index];
+  if (effect) {
+    switch (effect.type) {
+      case 'accident':      return 'accident';
+      case 'prevention':    return 'prevention';
+      case 'back-to-start': return 'special-back';
+      case 'skip-turn':     return 'special-skip';
+    }
+  }
+  return 'neutral';
+}

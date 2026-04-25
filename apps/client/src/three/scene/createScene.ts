@@ -79,7 +79,7 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
   }
 
   // Dado
-  const dicePhysics = new DicePhysics(scene);
+  const dicePhysics = new DicePhysics(scene, theme, assetManager);
 
   // Event bindings (gameBus)
   const activePos = new THREE.Vector3(BOARD_PATH[0].x, BOARD_PATH[0].y, BOARD_PATH[0].z);

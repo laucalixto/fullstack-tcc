@@ -24,7 +24,7 @@ interface PawnAnim { steps: PawnStep[]; stepIdx: number; t: number; onDone?: () 
 /**
  * Aplica a cor do jogador ao Object3D do peão. No modo procedural, cria material
  * novo. No modo glTF, procura mesh com nome `theme.pawn.bodyMaterialName` e
- * substitui o material dessa mesh. Veja `MODELING.md` para convenção de naming.
+ * substitui o material dessa mesh. Veja `_docs_refs/MODELING.md` para convenção de naming.
  */
 function applyPlayerColor(obj: THREE.Object3D, color: number, bodyMeshName: string, isGLTF: boolean): void {
   if (!isGLTF) {

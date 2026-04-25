@@ -1,6 +1,20 @@
 import * as THREE from 'three';
 import { gameBus } from '../EventBus';
 import { FACE_QUATERNIONS } from './faceRotations';
+import type { BoardTheme } from '../theme/boardTheme';
+import type { AssetLoader } from '../builders/tileBuilder';
+
+/**
+ * Mapeamento material-index → célula do atlas (0-indexed).
+ * Combina ordem de faces da BoxGeometry com convenção do atlas (célula i = valor i+1).
+ *   material 0 = +X = valor 3 → célula 2
+ *   material 1 = -X = valor 4 → célula 3
+ *   material 2 = +Y = valor 1 → célula 0
+ *   material 3 = -Y = valor 6 → célula 5
+ *   material 4 = +Z = valor 2 → célula 1
+ *   material 5 = -Z = valor 5 → célula 4
+ */
+const DICE_MATERIAL_TO_CELL: ReadonlyArray<number> = [2, 3, 0, 5, 1, 4];
 
 export type DiceState = 'idle' | 'spinning' | 'decelerating' | 'done';
 
@@ -34,7 +48,7 @@ export class DicePhysics {
   state: DiceState = 'idle';
   pendingFace: number | null = null;
 
-  private readonly mesh: THREE.Mesh;
+  private mesh: THREE.Object3D;
   private readonly scene: THREE.Scene;
 
   private spinTimer   = 0;
@@ -50,17 +64,54 @@ export class DicePhysics {
   private startY  = 0;
   private targetY = 0;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, theme?: BoardTheme, assets?: AssetLoader) {
     this.scene = scene;
 
     const geo  = new THREE.BoxGeometry(1, 1, 1);
     const mats = Array.from({ length: 6 }, () =>
       new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.3, metalness: 0.1 }),
     );
-    this.mesh = new THREE.Mesh(geo, mats);
-    this.mesh.castShadow = true;
-    this.mesh.visible = false;
+    const baseMesh = new THREE.Mesh(geo, mats);
+    baseMesh.castShadow = true;
+    baseMesh.visible = false;
+    this.mesh = baseMesh;
     scene.add(this.mesh);
+
+    // Atlas — aplica clones da textura por face com offset/repeat distintos.
+    // Mapeamento DICE_MATERIAL_TO_CELL respeita a ordem de faces da BoxGeometry.
+    if (theme?.dice.atlas && assets?.loadTexture) {
+      const atlas = theme.dice.atlas;
+      assets.loadTexture(atlas.url).then((tpl) => {
+        for (let i = 0; i < 6; i++) {
+          const cell = DICE_MATERIAL_TO_CELL[i];
+          const col  = cell % atlas.columns;
+          const row  = Math.floor(cell / atlas.columns);
+          const tex  = tpl.clone();
+          tex.repeat.set(1 / atlas.columns, 1 / atlas.rows);
+          tex.offset.set(col / atlas.columns, 1 - (row + 1) / atlas.rows);
+          mats[i].map = tex;
+          mats[i].needsUpdate = true;
+        }
+      }).catch(() => undefined);
+    }
+
+    // glTF — substitui o cubo procedural por um modelo carregado.
+    // Atenção: o modelo deve estar alinhado nos eixos como uma BoxGeometry padrão
+    // (face 1 = +Y, face 2 = +Z, face 3 = +X, face 4 = -X, face 5 = -Z, face 6 = -Y),
+    // pois as FACE_QUATERNIONS rotacionam o objeto inteiro para a face vencedora.
+    if (theme?.dice.url && assets?.loadGLTF) {
+      assets.loadGLTF(theme.dice.url, 'unknown').then((tpl) => {
+        const clone = tpl.clone() as THREE.Group;
+        const s = theme.dice.scale;
+        clone.scale.set(s, s, s);
+        clone.visible = this.mesh.visible;
+        clone.position.copy(this.mesh.position);
+        clone.quaternion.copy(this.mesh.quaternion);
+        scene.remove(this.mesh);
+        this.mesh = clone;
+        scene.add(this.mesh);
+      }).catch(() => undefined);
+    }
   }
 
   /** Lança o dado na posição informada iniciando a animação de tween. */

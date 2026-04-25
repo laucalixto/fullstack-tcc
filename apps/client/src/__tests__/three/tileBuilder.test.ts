@@ -2,13 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mocks Three.js sem WebGL
 vi.mock('three', () => {
-  const MockMesh = vi.fn().mockImplementation(() => ({
+  const MockMesh = vi.fn().mockImplementation((geo, mat) => ({
+    geometry: geo, material: mat,
     position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+    rotation: { set: vi.fn(), x: 0, y: 0, z: 0 },
     castShadow: false, receiveShadow: false, __type: 'mesh',
   }));
   return {
     BoxGeometry: vi.fn().mockImplementation((w, h, d) => ({ __w: w, __h: h, __d: d })),
-    MeshStandardMaterial: vi.fn().mockImplementation((opts) => ({ __opts: opts, color: opts?.color })),
+    PlaneGeometry: vi.fn().mockImplementation((w, h) => ({ __pw: w, __ph: h, __type: 'plane' })),
+    MeshStandardMaterial: vi.fn().mockImplementation((opts) => ({ __opts: opts, color: opts?.color, map: opts?.map })),
+    MeshBasicMaterial: vi.fn().mockImplementation((opts) => ({ __opts: opts, map: opts?.map, transparent: opts?.transparent })),
     Color: vi.fn().mockImplementation(() => ({ setHSL: vi.fn().mockReturnThis() })),
     Mesh: MockMesh,
     Group: vi.fn().mockImplementation(() => ({
@@ -23,7 +27,7 @@ vi.mock('three', () => {
 });
 
 import { buildTiles } from '../../three/builders/tileBuilder';
-import { DEFAULT_THEME } from '../../three/theme/boardTheme';
+import { DEFAULT_THEME, type BoardTheme } from '../../three/theme/boardTheme';
 import { BOARD_PATH } from '@safety-board/shared';
 
 function makeFakeScene() {
@@ -77,7 +81,7 @@ describe('tileBuilder', () => {
     await buildTiles(
       scene,
       { ...DEFAULT_THEME, tile: { ...DEFAULT_THEME.tile, url: '/models/tile.glb' } },
-      { loadGLTF },
+      { loadGLTF } as unknown as Parameters<typeof buildTiles>[2],
     );
 
     expect(loadGLTF).toHaveBeenCalledWith('/models/tile.glb', 'tile');
@@ -101,9 +105,144 @@ describe('tileBuilder', () => {
     await buildTiles(
       scene,
       { ...DEFAULT_THEME, tile: { ...DEFAULT_THEME.tile, url: '/models/tile.glb', scale: 1.5 } },
-      { loadGLTF },
+      { loadGLTF } as unknown as Parameters<typeof buildTiles>[2],
     );
 
     expect((scaleCalls as Array<[number, number, number]>).every(([x, y, z]) => x === 1.5 && y === 1.5 && z === 1.5)).toBe(true);
+  });
+
+  // ─── Atlas (opção A: 40 ícones únicos) ────────────────────────────────────
+
+  it('atlas configurado: adiciona um topper plane sobre cada tile (80 objetos no total)', async () => {
+    const makeTex = () => ({ repeat: { set: vi.fn() }, offset: { set: vi.fn() }, clone: vi.fn() });
+    const fakeTexture: ReturnType<typeof makeTex> = makeTex();
+    fakeTexture.clone.mockImplementation(makeTex);
+    const loadTexture = vi.fn().mockResolvedValue(fakeTexture);
+    const scene = makeFakeScene();
+    const themeWithAtlas: BoardTheme = {
+      ...DEFAULT_THEME,
+      tile: {
+        ...DEFAULT_THEME.tile,
+        atlas: { url: '/textures/tile-atlas.png', columns: 8, rows: 5 },
+      },
+    };
+    await buildTiles(scene, themeWithAtlas, { loadGLTF: vi.fn(), loadTexture });
+    // 40 tiles base + 40 toppers = 80 adds
+    expect(scene.added).toHaveLength(80);
+    expect(loadTexture).toHaveBeenCalledWith('/textures/tile-atlas.png');
+  });
+
+  it('atlas: cada topper recebe um clone da textura com offset/repeat distintos', async () => {
+    // Para testar UVs distintos, o builder precisa CLONAR a textura por tile.
+    // Usamos um spy sobre clone() do template retornado.
+    type FakeTex = { repeat: { set: ReturnType<typeof vi.fn> }; offset: { set: ReturnType<typeof vi.fn> }; clone: ReturnType<typeof vi.fn> };
+    const cloneSpies: FakeTex[] = [];
+    const cloneImpl = (): FakeTex => {
+      const t: FakeTex = {
+        repeat: { set: vi.fn() },
+        offset: { set: vi.fn() },
+        clone:  vi.fn(),
+      };
+      cloneSpies.push(t);
+      return t;
+    };
+    const fakeTexture = {
+      repeat: { set: vi.fn() },
+      offset: { set: vi.fn() },
+      clone: vi.fn(cloneImpl),
+    };
+    const loadTexture = vi.fn().mockResolvedValue(fakeTexture);
+    const scene = makeFakeScene();
+    await buildTiles(
+      scene,
+      { ...DEFAULT_THEME, tile: { ...DEFAULT_THEME.tile, atlas: { url: '/atlas.png', columns: 8, rows: 5 } } },
+      { loadGLTF: vi.fn(), loadTexture },
+    );
+
+    // 1 clone por tile — 40 clones esperados.
+    expect(cloneSpies).toHaveLength(BOARD_PATH.length);
+
+    // Tile 0 (linha 0, col 0): offset (0/8, 1 - 1/5 - 0/5) — origem topo-esquerda do atlas (Y é invertido em UV).
+    const c0 = cloneSpies[0];
+    expect(c0.repeat.set).toHaveBeenCalledWith(1 / 8, 1 / 5);
+    expect(c0.offset.set).toHaveBeenCalledWith(0, 1 - 1 / 5);
+
+    // Tile 9 (linha 1, col 1)
+    const c9 = cloneSpies[9];
+    expect(c9.offset.set).toHaveBeenCalledWith(1 / 8, 1 - 2 / 5);
+  });
+
+  // ─── Cascata urlByIndex / urlByCategory / url ─────────────────────────────
+
+  it('cascata: urlByIndex tem precedência sobre urlByCategory e url', async () => {
+    const scene = makeFakeScene();
+    const calls: string[] = [];
+    const fakeTemplate = {
+      clone: vi.fn(() => ({
+        position: { set: vi.fn() }, scale: { set: vi.fn() }, rotation: { set: vi.fn() }, traverse: vi.fn(),
+      })),
+    };
+    const loadGLTF = vi.fn(async (url: string) => {
+      calls.push(url);
+      return fakeTemplate;
+    });
+    await buildTiles(
+      scene,
+      {
+        ...DEFAULT_THEME,
+        tile: {
+          ...DEFAULT_THEME.tile,
+          url: '/models/tile-default.glb',
+          urlByCategory: { quiz: '/models/quiz.glb' },
+          urlByIndex: { 5: '/models/tile-5-special.glb' }, // 5 também é quiz
+        },
+      },
+      { loadGLTF } as unknown as Parameters<typeof buildTiles>[2],
+    );
+    // 5 deve usar urlByIndex (mais específico)
+    expect(calls).toContain('/models/tile-5-special.glb');
+  });
+
+  it('cascata: urlByCategory aplicado aos tiles que matcheiam (sem urlByIndex)', async () => {
+    const scene = makeFakeScene();
+    const calls: string[] = [];
+    const fakeTemplate = {
+      clone: vi.fn(() => ({
+        position: { set: vi.fn() }, scale: { set: vi.fn() }, rotation: { set: vi.fn() }, traverse: vi.fn(),
+      })),
+    };
+    const loadGLTF = vi.fn(async (url: string) => {
+      calls.push(url);
+      return fakeTemplate;
+    });
+    await buildTiles(
+      scene,
+      {
+        ...DEFAULT_THEME,
+        tile: {
+          ...DEFAULT_THEME.tile,
+          urlByCategory: { start: '/models/start.glb', finish: '/models/finish.glb' },
+        },
+      },
+      { loadGLTF } as unknown as Parameters<typeof buildTiles>[2],
+    );
+    expect(calls).toContain('/models/start.glb');
+    expect(calls).toContain('/models/finish.glb');
+  });
+
+  it('cascata: cai em procedural se nenhuma URL matchear', async () => {
+    const THREE = await import('three');
+    const scene = makeFakeScene();
+    await buildTiles(
+      scene,
+      { ...DEFAULT_THEME, tile: { ...DEFAULT_THEME.tile, urlByCategory: { quiz: '/q.glb' } } },
+      {
+        loadGLTF: vi.fn(async () => ({
+          clone: vi.fn(() => ({ position: { set: vi.fn() }, scale: { set: vi.fn() }, rotation: { set: vi.fn() }, traverse: vi.fn() })),
+        })),
+      } as unknown as Parameters<typeof buildTiles>[2],
+    );
+    // Tiles não-quiz devem ser BoxGeometry procedural — verifica que BoxGeometry foi chamada.
+    expect(THREE.BoxGeometry).toHaveBeenCalled();
   });
 });

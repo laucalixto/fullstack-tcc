@@ -44,14 +44,49 @@ export class AssetManager {
     const cached = this.textureCache.get(url);
     if (cached) return cached;
 
-    if (!this.textureLoader) this.textureLoader = new THREE.TextureLoader();
-    const loader = this.textureLoader;
+    const tex = url.toLowerCase().endsWith('.svg')
+      ? await this.loadSvgAsTexture(url)
+      : await this.loadRasterTexture(url);
 
-    const tex = await new Promise<THREE.Texture>((resolve, reject) => {
-      loader.load(url, (t) => resolve(t), undefined, (err) => reject(err));
-    });
     this.textureCache.set(url, tex);
     return tex;
+  }
+
+  // PNG/JPG/WebP — caminho padrão via TextureLoader.
+  private async loadRasterTexture(url: string): Promise<THREE.Texture> {
+    if (!this.textureLoader) this.textureLoader = new THREE.TextureLoader();
+    const loader = this.textureLoader;
+    return new Promise<THREE.Texture>((resolve, reject) => {
+      loader.load(url, (t) => resolve(t), undefined, (err) => reject(err));
+    });
+  }
+
+  // SVG — Three.js não consome SVG como textura direto. Carregamos via fetch,
+  // renderizamos num canvas e empacotamos como CanvasTexture.
+  private async loadSvgAsTexture(url: string): Promise<THREE.Texture> {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch SVG: ${url}`);
+    const text = await res.text();
+    const blob = new Blob([text], { type: 'image/svg+xml' });
+    const objUrl = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = (e) => reject(e);
+        el.src = objUrl;
+      });
+      const w = img.width  || 512;
+      const h = img.height || 512;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.drawImage(img, 0, 0, w, h);
+      return new THREE.CanvasTexture(canvas);
+    } finally {
+      URL.revokeObjectURL(objUrl);
+    }
   }
 
   async preloadAll(urls: string[]): Promise<void> {

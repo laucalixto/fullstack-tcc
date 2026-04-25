@@ -191,6 +191,41 @@ describe('DicePhysics — tween sem cannon-es', () => {
     expect(gameBus.emit).not.toHaveBeenCalled();
   });
 
+  // ─── Atlas do dado ────────────────────────────────────────────────────────
+
+  it('com theme.dice.atlas: chama loadTexture com a URL do atlas', async () => {
+    const loadTexture = vi.fn().mockResolvedValue({
+      clone: vi.fn().mockReturnValue({ repeat: { set: vi.fn() }, offset: { set: vi.fn() } }),
+      repeat: { set: vi.fn() },
+      offset: { set: vi.fn() },
+    });
+    const theme = {
+      dice: { scale: 1.0, atlas: { url: '/textures/dice-atlas.svg', columns: 6, rows: 1 } },
+    };
+    new (await import('../../three/dice/DicePhysics')).DicePhysics(
+      scene as never,
+      theme as never,
+      { loadTexture, loadGLTF: vi.fn() } as never,
+    );
+    // Espera microtask: loadTexture invocado de forma assíncrona no construtor
+    await Promise.resolve();
+    expect(loadTexture).toHaveBeenCalledWith('/textures/dice-atlas.svg');
+  });
+
+  it('com theme.dice.url: chama loadGLTF com a URL do modelo', async () => {
+    const loadGLTF = vi.fn().mockResolvedValue({
+      clone: vi.fn().mockReturnValue({ scale: { set: vi.fn() }, traverse: vi.fn() }),
+    });
+    const theme = { dice: { scale: 1.0, url: '/models/dice.glb' } };
+    new (await import('../../three/dice/DicePhysics')).DicePhysics(
+      scene as never,
+      theme as never,
+      { loadGLTF, loadTexture: vi.fn() } as never,
+    );
+    await Promise.resolve();
+    expect(loadGLTF).toHaveBeenCalledWith('/models/dice.glb', 'unknown');
+  });
+
   // ─── dispose ───────────────────────────────────────────────────────────────
 
   it('dispose() remove mesh da cena', () => {
