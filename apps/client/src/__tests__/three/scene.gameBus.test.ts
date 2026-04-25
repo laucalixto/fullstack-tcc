@@ -104,7 +104,7 @@ vi.mock('../../three/dice/DicePhysics', () => ({
 }));
 
 // ─── Imports após mocks ───────────────────────────────────────────────────────
-import { initThreeScene } from '../../three/scene';
+import { initThreeScene } from '../../three/scene/createScene';
 import { gameBus } from '../../three/EventBus';
 import { DicePhysics } from '../../three/dice/DicePhysics';
 import type { Player } from '@safety-board/shared';

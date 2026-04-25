@@ -274,10 +274,21 @@ function GameLoadingPage() {
   const session    = useGameStore((s) => s.session);
   const myPlayerId = useGameStore((s) => s.myPlayerId);
 
-  // Sinaliza ao servidor que saiu do tutorial e está pronto para o tabuleiro
+  // Preload de assets 3D (glTF/texturas) antes de entrar no tabuleiro,
+  // depois sinaliza ao servidor que está pronto. Sem URLs no tema default,
+  // preloadAll é no-op imediato.
   useEffect(() => {
     if (!session?.id || !myPlayerId) return;
-    socket.emit(EVENTS.PLAYER_GAME_READY, { sessionId: session.id, playerId: myPlayerId });
+    (async () => {
+      try {
+        const { assetManager } = await import('./three/assets/AssetManager');
+        const { DEFAULT_THEME, getAllAssetUrls } = await import('./three/theme/boardTheme');
+        await assetManager.preloadAll(getAllAssetUrls(DEFAULT_THEME));
+      } catch {
+        // Preload é best-effort: se falhar, segue; builders fazem fallback procedural.
+      }
+      socket.emit(EVENTS.PLAYER_GAME_READY, { sessionId: session.id, playerId: myPlayerId });
+    })();
   }, [session?.id, myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navega ao tabuleiro quando todos estão prontos

@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react';
-import { initThreeScene } from './scene';
+import { createScene } from './scene/createScene';
 
 /**
  * Monta a cena Three.js em um div usando o padrão callback ref de Dirksen (Cap. 14, p.497)
@@ -14,7 +14,7 @@ export function ThreeCanvas() {
 
   const mountRef = useCallback((node: HTMLDivElement | null) => {
     if (node !== null) {
-      cleanupRef.current = initThreeScene(node);
+      cleanupRef.current = createScene(node);
     } else {
       cleanupRef.current?.();
       cleanupRef.current = null;

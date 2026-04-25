@@ -3,8 +3,9 @@ import { StrictMode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { ThreeCanvas } from '../../three/ThreeCanvas';
 
-vi.mock('../../three/scene', () => ({
-  initThreeScene: vi.fn(() => vi.fn()), // retorna cleanup fn
+vi.mock('../../three/scene/createScene', () => ({
+  createScene:    vi.fn(() => vi.fn()), // retorna cleanup fn
+  initThreeScene: vi.fn(() => vi.fn()), // alias mantido por compatibilidade
 }));
 
 // ─── RED: falha até ThreeCanvas.tsx ser implementado ─────────────────────────
@@ -18,14 +19,14 @@ describe('ThreeCanvas', () => {
   });
 
   it('chama initThreeScene com o elemento div ao montar', async () => {
-    const { initThreeScene } = await import('../../three/scene');
+    const { createScene: initThreeScene } = await import('../../three/scene/createScene');
     render(<ThreeCanvas />);
     expect(initThreeScene).toHaveBeenCalledTimes(1);
     expect(initThreeScene).toHaveBeenCalledWith(expect.any(HTMLDivElement));
   });
 
   it('não chama initThreeScene duas vezes em re-renders', async () => {
-    const { initThreeScene } = await import('../../three/scene');
+    const { createScene: initThreeScene } = await import('../../three/scene/createScene');
     const { rerender } = render(<ThreeCanvas />);
     rerender(<ThreeCanvas />);
     expect(initThreeScene).toHaveBeenCalledTimes(1);
@@ -33,7 +34,7 @@ describe('ThreeCanvas', () => {
 
   it('chama a função de cleanup ao desmontar', async () => {
     const cleanup = vi.fn();
-    const { initThreeScene } = await import('../../three/scene');
+    const { createScene: initThreeScene } = await import('../../three/scene/createScene');
     vi.mocked(initThreeScene).mockReturnValue(cleanup);
     const { unmount } = render(<ThreeCanvas />);
     unmount();
@@ -49,7 +50,7 @@ describe('ThreeCanvas', () => {
   // StrictMode (mount → simulated-unmount → simulated-remount).
   it('não invoca cleanup durante ciclo StrictMode — canvas permanece vivo', async () => {
     const cleanup = vi.fn();
-    const { initThreeScene } = await import('../../three/scene');
+    const { createScene: initThreeScene } = await import('../../three/scene/createScene');
     vi.mocked(initThreeScene).mockReturnValue(cleanup);
 
     render(

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 // ─── RED: tela de carregamento entre tutorial e tabuleiro ─────────────────────
@@ -77,18 +77,24 @@ describe('GameLoadingPage', () => {
     expect(screen.getByTestId('game-loading')).toBeInTheDocument();
   });
 
-  it('emite PLAYER_GAME_READY ao montar com sessionId e playerId', () => {
+  it('emite PLAYER_GAME_READY após preload de assets', async () => {
     useGameStore.setState({ session: makeSession(), myPlayerId: 'p1' });
     renderLoading();
-    expect(socket.emit).toHaveBeenCalledWith(
-      EVENTS.PLAYER_GAME_READY,
-      { sessionId: 'session-1', playerId: 'p1' },
-    );
+    // O preload é assíncrono (await preloadAll) antes do emit. No default,
+    // preloadAll([]) resolve imediatamente — mas precisa de um tick.
+    await waitFor(() => {
+      expect(socket.emit).toHaveBeenCalledWith(
+        EVENTS.PLAYER_GAME_READY,
+        { sessionId: 'session-1', playerId: 'p1' },
+      );
+    });
   });
 
-  it('não emite PLAYER_GAME_READY sem sessão', () => {
+  it('não emite PLAYER_GAME_READY sem sessão', async () => {
     useGameStore.setState({ session: null, myPlayerId: null });
     renderLoading();
+    // Aguarda ciclo assíncrono para garantir que nada foi emitido.
+    await new Promise((r) => setTimeout(r, 50));
     expect(socket.emit).not.toHaveBeenCalledWith(EVENTS.PLAYER_GAME_READY, expect.anything());
   });
 

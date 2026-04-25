@@ -1,4 +1,5 @@
 # ─── Documentos internos (não versionados) ───────────────────────────────────
+_docs_refs/
 referencias/
 CLAUDE.md
 PLANO_DESENVOLVIMENTO.md
@@ -7,6 +8,8 @@ CONF_SERVICOS.md
 plano_refatoracao_threejs.md
 plano_threejs_refactor.md
 capitulos_finais_tcc.md
+MODELING.md
+REFACTOR_PLAN.md
 
 # ─── Dependências ────────────────────────────────────────────────────────────
 node_modules/
