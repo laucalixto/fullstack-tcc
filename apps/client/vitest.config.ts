@@ -20,7 +20,10 @@ export default defineConfig({
         'src/AppRouter.tsx',
         // Requer WebGL/contexto de renderização — coberto pelo E2E Playwright
         'src/three/scene.ts',
+        'src/three/scene/**',
         'src/three/camera.ts',
+        // Dev-only /preview com lil-gui + WebGL — não unitarizável em jsdom
+        'src/three/BoardPreview.tsx',
         'src/__tests__/**',
       ],
       thresholds: {
