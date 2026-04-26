@@ -117,4 +117,32 @@ describe('CharacterSelect', () => {
     fireEvent.click(screen.getByTestId('avatar-option-0'));
     expect(screen.getByTestId('confirm-button')).not.toBeDisabled();
   });
+
+  // ─── Imagem do avatar ────────────────────────────────────────────────────────
+
+  it('renderiza <img> com src=imageUrl e alt com nome para cada avatar', () => {
+    render(<CharacterSelect onConfirm={vi.fn()} avatars={TEST_AVATARS} />);
+    const img0 = screen.getByTestId('avatar-image-0') as HTMLImageElement;
+    expect(img0.src).toContain('/avatars/operator.png');
+    expect(img0.alt).toBe('Operator');
+    const img2 = screen.getByTestId('avatar-image-2') as HTMLImageElement;
+    expect(img2.src).toContain('/avatars/admin.png');
+    expect(img2.alt).toBe('Admin');
+  });
+
+  it('quando a imagem falha (onError), exibe fallback colorido com a inicial do nome', () => {
+    render(<CharacterSelect onConfirm={vi.fn()} avatars={TEST_AVATARS} />);
+    const img0 = screen.getByTestId('avatar-image-0') as HTMLImageElement;
+    fireEvent.error(img0);
+    // Após o erro, a imagem deixa de ser exibida e o fallback aparece
+    expect(screen.queryByTestId('avatar-image-0')).not.toBeInTheDocument();
+    const fallback = screen.getByTestId('avatar-fallback-0');
+    expect(fallback).toHaveTextContent('O'); // Inicial de Operator
+  });
+
+  it('imagens carregadas com sucesso permanecem visíveis (sem fallback)', () => {
+    render(<CharacterSelect onConfirm={vi.fn()} avatars={TEST_AVATARS} />);
+    expect(screen.getByTestId('avatar-image-0')).toBeInTheDocument();
+    expect(screen.queryByTestId('avatar-fallback-0')).not.toBeInTheDocument();
+  });
 });

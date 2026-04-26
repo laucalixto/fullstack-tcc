@@ -20,6 +20,7 @@ export function CharacterSelect({
   const [firstName, setFirstName] = useState(initialFirstName);
   const [lastName, setLastName] = useState(initialLastName);
   const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(null);
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
 
   const canConfirm =
     firstName.trim().length > 0 &&
@@ -101,12 +102,29 @@ export function CharacterSelect({
                       className="w-full h-full flex items-center justify-center"
                       style={{ backgroundColor: avatar.color + '22' }}
                     >
-                      <div
-                        className="w-24 h-24 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-lg"
-                        style={{ backgroundColor: avatar.color }}
-                      >
-                        {avatar.name.charAt(0)}
-                      </div>
+                      {failedImageIds.has(avatar.id) ? (
+                        <div
+                          data-testid={`avatar-fallback-${i}`}
+                          className="w-24 h-24 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-lg"
+                          style={{ backgroundColor: avatar.color }}
+                        >
+                          {avatar.name.charAt(0)}
+                        </div>
+                      ) : (
+                        <img
+                          data-testid={`avatar-image-${i}`}
+                          src={avatar.imageUrl}
+                          alt={avatar.name}
+                          onError={() =>
+                            setFailedImageIds((prev) => {
+                              const next = new Set(prev);
+                              next.add(avatar.id);
+                              return next;
+                            })
+                          }
+                          className="w-full h-full object-cover"
+                        />
+                      )}
                     </div>
                     {isSelected && (
                       <div className="absolute top-4 left-4 bg-primary text-on-primary text-[10px] font-black px-2 py-1 uppercase tracking-tighter rounded">
