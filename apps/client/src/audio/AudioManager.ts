@@ -1,9 +1,13 @@
 import { Howl, Howler } from 'howler';
 import type { CardCategory } from './cardAudioCategory.js';
 
+// Caminhos das trilhas e SFX. Howler aceita qualquer extensão suportada pelo
+// browser (mp3, ogg, webm, m4a, wav, flac, aac). Trocar a extensão aqui por
+// .ogg ou .webm funciona transparentemente — basta o arquivo existir em /audio.
 const BOARD_TRACK    = '/audio/track-board.mp3';
 const LOBBY_TRACK    = '/audio/track-lobby.mp3';
 const VICTORY_TRACK  = '/audio/track-victory.mp3';
+const PODIUM_TRACK   = '/audio/track-podium.mp3';
 const DICE_CLICK_SFX = '/audio/sfx-dice-click.mp3';
 const DICE_ROLL_SFX  = '/audio/sfx-dice-roll.mp3';
 const DRAW_TICK_SFX  = '/audio/sfx-draw-tick.mp3';
@@ -24,6 +28,7 @@ export class AudioManager {
   private boardTrack:    Howl | null = null;
   private lobbyTrack:    Howl | null = null;
   private victoryTrack:  Howl | null = null;
+  private podiumTrack:   Howl | null = null;
   private activeStinger: Howl | null = null;
   private diceRollSfx:   Howl | null = null;
   private muted = false;
@@ -134,10 +139,25 @@ export class AudioManager {
     setTimeout(() => { track.stop(); track.unload(); }, FADE_MS + 50);
   }
 
+  startPodiumTrack(): void {
+    this.stopAll();
+    this.podiumTrack = new Howl({ src: [PODIUM_TRACK], loop: true, volume: FULL_VOLUME });
+    if (!this.muted) this.podiumTrack.play();
+  }
+
+  stopPodiumTrack(): void {
+    if (!this.podiumTrack) return;
+    const track = this.podiumTrack;
+    this.podiumTrack = null;
+    track.fade(track.volume(), 0, FADE_MS);
+    setTimeout(() => { track.stop(); track.unload(); }, FADE_MS + 50);
+  }
+
   private stopAll(): void {
     if (this.boardTrack)    { this.boardTrack.stop();    this.boardTrack.unload();    this.boardTrack    = null; }
     if (this.lobbyTrack)    { this.lobbyTrack.stop();    this.lobbyTrack.unload();    this.lobbyTrack    = null; }
     if (this.victoryTrack)  { this.victoryTrack.stop();  this.victoryTrack.unload();  this.victoryTrack  = null; }
+    if (this.podiumTrack)   { this.podiumTrack.stop();   this.podiumTrack.unload();   this.podiumTrack   = null; }
     if (this.activeStinger) { this.activeStinger.stop(); this.activeStinger.unload(); this.activeStinger = null; }
   }
 }

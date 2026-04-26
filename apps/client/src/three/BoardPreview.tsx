@@ -12,13 +12,20 @@ type Win = Record<string, unknown>;
 
 interface PreviewHandles {
   setTileScale: (s: number) => void;
+  setTilePosition: (index: number, x: number, y: number, z: number) => void;
+  getTilePosition: (index: number) => { x: number; y: number; z: number } | null;
   setAmbientIntensity: (v: number) => void;
   setSunIntensity: (v: number) => void;
+  setSunPosition: (x: number, y: number, z: number) => void;
   setFogNear: (v: number) => void;
   setFogFar:  (v: number) => void;
+  setFogColor: (hex: number) => void;
+  setBackgroundColor: (hex: number) => void;
+  setGroundColor: (hex: number) => void;
   setPawnScale: (s: number) => void;
   setToneMappingExposure: (v: number) => void;
   setToneMapping: (name: 'none' | 'linear' | 'aces' | 'reinhard' | 'cineon') => void;
+  exportLayout: () => Array<{ index: number; x: number; y: number; z: number }>;
 }
 
 function getCamera()   { return (window as unknown as Win).__previewCamera__   as THREE.PerspectiveCamera | undefined; }
@@ -104,11 +111,46 @@ export function BoardPreview() {
     const ty = folderTgt.add(tgt, 'y').decimals(2).disable().name('Y');
     const tz = folderTgt.add(tgt, 'z').decimals(2).disable().name('Z');
 
-    // ── Tile (realtime via handles) ─────────────────────────────────────────
-    const tileFolder = gui.addFolder('Tile');
+    // ── Tile (escala global) ─────────────────────────────────────────────────
+    const tileFolder = gui.addFolder('Tile (escala global)');
     tileFolder.add({ scale: 1 }, 'scale', 0.1, 3, 0.05).name('scale').onChange((v: number) => {
       getHandles()?.setTileScale(v);
     });
+
+    // ── Tile específico (xyz por índice) ────────────────────────────────────
+    const tileSpecific = gui.addFolder('Tile específico (posição XYZ)');
+    const tileEdit = { index: 0, x: 0, y: 0, z: 0 };
+    function syncTileEdit() {
+      const p = getHandles()?.getTilePosition(tileEdit.index);
+      if (!p) return;
+      tileEdit.x = p.x; tileEdit.y = p.y; tileEdit.z = p.z;
+      tileSpecific.controllers.forEach((c) => c.updateDisplay());
+    }
+    tileSpecific
+      .add(tileEdit, 'index', 0, 39, 1)
+      .name('índice (0-39)')
+      .onChange(() => syncTileEdit());
+    tileSpecific.add(tileEdit, 'x', -20, 20, 0.1).name('X (m)').onChange((v: number) => {
+      getHandles()?.setTilePosition(tileEdit.index, v, tileEdit.y, tileEdit.z);
+    });
+    tileSpecific.add(tileEdit, 'y', -5, 10, 0.05).name('Y (m)').onChange((v: number) => {
+      getHandles()?.setTilePosition(tileEdit.index, tileEdit.x, v, tileEdit.z);
+    });
+    tileSpecific.add(tileEdit, 'z', -20, 20, 0.1).name('Z (m)').onChange((v: number) => {
+      getHandles()?.setTilePosition(tileEdit.index, tileEdit.x, tileEdit.y, v);
+    });
+    tileSpecific.add({
+      'Exportar boardLayout (JSON)': () => {
+        const layout = getHandles()?.exportLayout();
+        if (!layout) return;
+        const json = JSON.stringify(layout, null, 2);
+        console.info('[BoardPreview] boardLayout atual:\n' + json);
+        navigator.clipboard.writeText(json).catch(() => {});
+        alert('boardLayout copiado para clipboard');
+      },
+    }, 'Exportar boardLayout (JSON)');
+    // Inicializa com posição do tile 0
+    setTimeout(syncTileEdit, 100);
 
     // ── Pawn ────────────────────────────────────────────────────────────────
     const pawnFolder = gui.addFolder('Peão');
@@ -121,8 +163,32 @@ export function BoardPreview() {
     lightFolder.add({ ambientIntensity: 0.5 }, 'ambientIntensity', 0, 2, 0.05).name('ambient').onChange((v: number) => {
       getHandles()?.setAmbientIntensity(v);
     });
-    lightFolder.add({ sunIntensity: 1.2 }, 'sunIntensity', 0, 3, 0.05).name('sun').onChange((v: number) => {
+    lightFolder.add({ sunIntensity: 1.2 }, 'sunIntensity', 0, 3, 0.05).name('sun intensity').onChange((v: number) => {
       getHandles()?.setSunIntensity(v);
+    });
+    const sunPos = { x: 10, y: 20, z: 10 };
+    lightFolder.add(sunPos, 'x', -50, 50, 0.5).name('sun X').onChange((v: number) => {
+      getHandles()?.setSunPosition(v, sunPos.y, sunPos.z);
+    });
+    lightFolder.add(sunPos, 'y', 0, 50, 0.5).name('sun Y').onChange((v: number) => {
+      getHandles()?.setSunPosition(sunPos.x, v, sunPos.z);
+    });
+    lightFolder.add(sunPos, 'z', -50, 50, 0.5).name('sun Z').onChange((v: number) => {
+      getHandles()?.setSunPosition(sunPos.x, sunPos.y, v);
+    });
+
+    // ── Cores ───────────────────────────────────────────────────────────────
+    const colorFolder = gui.addFolder('Cores');
+    const colors = { background: '#1a1a2e', fog: '#1a1a2e', ground: '#3d2b1f' };
+    function hexStringToInt(hex: string): number { return parseInt(hex.replace('#', ''), 16); }
+    colorFolder.addColor(colors, 'background').name('background').onChange((v: string) => {
+      getHandles()?.setBackgroundColor(hexStringToInt(v));
+    });
+    colorFolder.addColor(colors, 'fog').name('fog').onChange((v: string) => {
+      getHandles()?.setFogColor(hexStringToInt(v));
+    });
+    colorFolder.addColor(colors, 'ground').name('ground').onChange((v: string) => {
+      getHandles()?.setGroundColor(hexStringToInt(v));
     });
 
     // ── Tone mapping / exposição ────────────────────────────────────────────

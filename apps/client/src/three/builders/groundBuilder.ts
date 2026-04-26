@@ -11,13 +11,13 @@ export async function buildGround(
   scene: THREE.Scene,
   theme: BoardTheme,
   assets: AssetLoader,
-): Promise<void> {
+): Promise<THREE.Object3D> {
   if (theme.ground.url) {
     const template = await assets.loadGLTF(theme.ground.url, 'ground');
     const clone = template.clone() as THREE.Group;
-    clone.position.set(4.5, -0.25, 4); // mesma posição do procedural
+    clone.position.set(4.5, -0.25, 4);
     scene.add(clone);
-    return;
+    return clone;
   }
 
   const [w, d] = theme.ground.size;
@@ -27,4 +27,5 @@ export async function buildGround(
   ground.position.set(4.5, -0.25, 4);
   ground.receiveShadow = true;
   scene.add(ground);
+  return ground;
 }

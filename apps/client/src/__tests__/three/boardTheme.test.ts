@@ -10,9 +10,9 @@ describe('boardTheme', () => {
     expect(DEFAULT_THEME.decorations).toEqual([]);
   });
 
-  it('DEFAULT_THEME tem atlas de tile e dado configurados (placeholders SVG)', () => {
-    expect(DEFAULT_THEME.tile.atlas).toEqual({ url: '/textures/tile-atlas.svg', columns: 8, rows: 5 });
-    expect(DEFAULT_THEME.dice.atlas).toEqual({ url: '/textures/dice-atlas.svg', columns: 6, rows: 1 });
+  it('DEFAULT_THEME tem atlas de tile e dado configurados (placeholders PNG)', () => {
+    expect(DEFAULT_THEME.tile.atlas).toEqual({ url: '/textures/tile-atlas.png', columns: 8, rows: 5 });
+    expect(DEFAULT_THEME.dice.atlas).toEqual({ url: '/textures/dice-atlas.png', columns: 6, rows: 1 });
   });
 
   it('DEFAULT_THEME usa scale 1.0 (convenção 1 unit = 1 metro)', () => {
@@ -27,8 +27,8 @@ describe('boardTheme', () => {
 
   it('getAllAssetUrls do default retorna apenas as URLs dos atlases placeholder', () => {
     expect(getAllAssetUrls(DEFAULT_THEME).sort()).toEqual([
-      '/textures/dice-atlas.svg',
-      '/textures/tile-atlas.svg',
+      '/textures/dice-atlas.png',
+      '/textures/tile-atlas.png',
     ]);
   });
 
@@ -84,9 +84,9 @@ describe('boardTheme', () => {
     expect(getAllAssetUrls(theme)).toContain('/textures/tile-atlas.png');
   });
 
-  it('DEFAULT_THEME.tile.atlas aponta para placeholder SVG', () => {
+  it('DEFAULT_THEME.tile.atlas aponta para placeholder PNG', () => {
     expect(DEFAULT_THEME.tile.atlas).toBeDefined();
-    expect(DEFAULT_THEME.tile.atlas?.url).toMatch(/\.svg$/);
+    expect(DEFAULT_THEME.tile.atlas?.url).toMatch(/\.(png|jpg|jpeg|svg)$/);
   });
 
   // ─── Cascata urlByIndex / urlByCategory / url ─────────────────────────────
@@ -127,10 +127,10 @@ describe('boardTheme', () => {
 
   // ─── Dado (theme.dice) ────────────────────────────────────────────────────
 
-  it('DEFAULT_THEME.dice tem scale 1.0, atlas placeholder e nenhum modelo glTF', () => {
+  it('DEFAULT_THEME.dice tem scale 1.0, atlas placeholder PNG e nenhum modelo glTF', () => {
     expect(DEFAULT_THEME.dice.scale).toBe(1.0);
     expect(DEFAULT_THEME.dice.url).toBeUndefined();
-    expect(DEFAULT_THEME.dice.atlas?.url).toMatch(/\.svg$/);
+    expect(DEFAULT_THEME.dice.atlas?.url).toMatch(/\.png$/);
     expect(DEFAULT_THEME.dice.texture).toBeUndefined();
   });
 

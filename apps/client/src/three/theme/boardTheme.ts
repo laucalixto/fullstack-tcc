@@ -140,7 +140,7 @@ export const DEFAULT_THEME: BoardTheme = {
     scale: 1.0,
     useProceduralColors: true,
     atlas: {
-      url: '/textures/tile-atlas.svg',
+      url: '/textures/tile-atlas.png',
       columns: 8,
       rows: 5,
     },
@@ -156,7 +156,7 @@ export const DEFAULT_THEME: BoardTheme = {
   },
   dice: {
     scale: 1.0,
-    atlas: { url: '/textures/dice-atlas.svg', columns: 6, rows: 1 },
+    atlas: { url: '/textures/dice-atlas.png', columns: 6, rows: 1 },
   },
   decorations: [],
 };

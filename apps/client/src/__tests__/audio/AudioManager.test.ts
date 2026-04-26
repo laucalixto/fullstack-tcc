@@ -232,4 +232,40 @@ describe('AudioManager', () => {
       loop: false,
     }));
   });
+
+  // ─── Trilha do pódio ─────────────────────────────────────────────────────────
+
+  it('startPodiumTrack instancia Howl com a trilha do pódio em loop', () => {
+    mgr.startPodiumTrack();
+    expect(Howl).toHaveBeenCalledWith(expect.objectContaining({
+      src: ['/audio/track-podium.mp3'],
+      loop: true,
+    }));
+  });
+
+  it('startPodiumTrack para quaisquer outras trilhas antes (stopAll)', () => {
+    mgr.startBoardTrack();
+    const board = vi.mocked(Howl).mock.results[0].value;
+    mgr.startPodiumTrack();
+    expect(board.unload).toHaveBeenCalled();
+  });
+
+  it('stopPodiumTrack chama unload após o fade terminar', () => {
+    mgr.startPodiumTrack();
+    const instance = vi.mocked(Howl).mock.results[0].value;
+    mgr.stopPodiumTrack();
+    vi.runAllTimers();
+    expect(instance.unload).toHaveBeenCalled();
+  });
+
+  it('startPodiumTrack não reproduz quando muted', () => {
+    mgr.setMuted(true);
+    mgr.startPodiumTrack();
+    const instance = vi.mocked(Howl).mock.results[0].value;
+    expect(instance.play).not.toHaveBeenCalled();
+  });
+
+  it('stopPodiumTrack é no-op quando não iniciado', () => {
+    expect(() => mgr.stopPodiumTrack()).not.toThrow();
+  });
 });

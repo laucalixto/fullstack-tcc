@@ -58,9 +58,9 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
 
   // Tiles, chão, decorações — tile/ground/decoração podem ser assíncronos (glTF)
   // Não aguardamos aqui: preload centralizado é feito antes, em GameLoadingPage.
-  const tilesRefHolder: { tiles: THREE.Object3D[] } = { tiles: [] };
+  const tilesRefHolder: { tiles: THREE.Object3D[]; ground: THREE.Object3D | null } = { tiles: [], ground: null };
   buildTiles(scene, theme, assetManager).then((ts) => { tilesRefHolder.tiles = ts; });
-  buildGround(scene, theme, assetManager);
+  buildGround(scene, theme, assetManager).then((g) => { tilesRefHolder.ground = g; });
   buildDecorations(scene, theme, assetManager);
 
   // Handles em dev: permitem ao /preview GUI aplicar tuning em realtime.
@@ -69,10 +69,30 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
       setTileScale(s: number) {
         for (const t of tilesRefHolder.tiles) t.scale.set(s, s, s);
       },
+      setTilePosition(index: number, x: number, y: number, z: number) {
+        const t = tilesRefHolder.tiles[index];
+        if (t) t.position.set(x, y, z);
+      },
+      getTilePosition(index: number): { x: number; y: number; z: number } | null {
+        const t = tilesRefHolder.tiles[index];
+        return t ? { x: t.position.x, y: t.position.y, z: t.position.z } : null;
+      },
       setAmbientIntensity(v: number) { lightRefs.ambient.intensity = v; },
       setSunIntensity(v: number)     { lightRefs.sun.intensity = v; },
+      setSunPosition(x: number, y: number, z: number) { lightRefs.sun.position.set(x, y, z); },
       setFogNear(v: number) { lightRefs.fog.near = v; },
       setFogFar(v: number)  { lightRefs.fog.far = v; },
+      setFogColor(hex: number) { lightRefs.fog.color.setHex(hex); },
+      setBackgroundColor(hex: number) {
+        if (scene.background instanceof THREE.Color) scene.background.setHex(hex);
+        else scene.background = new THREE.Color(hex);
+      },
+      setGroundColor(hex: number) {
+        const g = tilesRefHolder.ground as THREE.Mesh | null;
+        if (!g) return;
+        const mat = g.material as THREE.MeshStandardMaterial | undefined;
+        if (mat && mat.color) mat.color.setHex(hex);
+      },
       setPawnScale(s: number) { pawnManager.setGlobalScale(s); },
       setToneMappingExposure(v: number) { renderer.toneMappingExposure = v; },
       setToneMapping(name: 'none' | 'linear' | 'aces' | 'reinhard' | 'cineon') {
@@ -84,13 +104,19 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
           cineon:   THREE.CineonToneMapping,
         };
         renderer.toneMapping = map[name] ?? THREE.ACESFilmicToneMapping;
-        // Materiais usando shader-based tone mapping precisam do flag para recompilar.
         scene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           const mat = mesh.material;
           if (Array.isArray(mat)) mat.forEach((m) => { (m as THREE.Material).needsUpdate = true; });
           else if (mat) (mat as THREE.Material).needsUpdate = true;
         });
+      },
+      /** Coleta as posições atuais dos 40 tiles para exportar como boardLayout. */
+      exportLayout(): Array<{ index: number; x: number; y: number; z: number }> {
+        return tilesRefHolder.tiles.map((t, i) => ({
+          index: i,
+          x: t.position.x, y: t.position.y, z: t.position.z,
+        }));
       },
     };
   }

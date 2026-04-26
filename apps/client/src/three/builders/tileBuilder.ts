@@ -69,12 +69,13 @@ export async function buildTiles(
     scene.add(baseObj);
     tiles.push(baseObj);
 
-    // Topper de atlas: aplica acima do tile. Funciona com qualquer base (procedural ou glTF).
+    // Topper de atlas: child do tile base. Mover o tile (handle setTilePosition)
+    // move o topper junto. Coords relativas ao tile (origem no centro).
     if (atlasTexture && theme.tile.atlas) {
       const topper = buildAtlasTopper(atlasTexture, theme.tile.atlas, tile.index);
-      topper.position.set(tile.x, tile.y + 0.16, tile.z); // +0.16 = 0.15 (meia altura do tile) + 0.01 (folga)
-      topper.rotation.set(-Math.PI / 2, 0, 0);            // plane horizontal voltado para cima
-      scene.add(topper);
+      topper.position.set(0, 0.16, 0); // +0.16 = 0.15 (meia altura do tile) + 0.01 (folga)
+      topper.rotation.set(-Math.PI / 2, 0, 0);
+      baseObj.add(topper);
     }
   }
   return tiles;

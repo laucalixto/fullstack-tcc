@@ -322,10 +322,13 @@ function PodiumPage() {
   const gameResult = useGameStore((s) => s.gameResult);
   const myPlayerId = useGameStore((s) => s.myPlayerId);
 
-  // Trilha de vitória iniciada no GamePage (camera:victory) persiste aqui;
-  // encerra ao sair do pódio (navegação para /resultado, /jogador etc).
+  // Trilha de vitória vem do GamePage (camera:victory). Ao chegar aqui:
+  //  - corta a victory (clímax) e inicia a podium (clima de celebração).
+  //  - sair do pódio (unmount) para a podium.
   useEffect(() => {
-    return () => { audioManager.stopVictoryTrack(); };
+    audioManager.stopVictoryTrack();
+    audioManager.startPodiumTrack();
+    return () => { audioManager.stopPodiumTrack(); };
   }, []);
 
   return (

@@ -7,6 +7,8 @@ vi.mock('three', () => {
     position: { set: vi.fn(), x: 0, y: 0, z: 0 },
     rotation: { set: vi.fn(), x: 0, y: 0, z: 0 },
     castShadow: false, receiveShadow: false, __type: 'mesh',
+    children: [] as unknown[],
+    add(child: unknown) { (this.children as unknown[]).push(child); },
   }));
   return {
     BoxGeometry: vi.fn().mockImplementation((w, h, d) => ({ __w: w, __h: h, __d: d })),
@@ -21,6 +23,8 @@ vi.mock('three', () => {
       rotation: { set: vi.fn() },
       clone:    vi.fn().mockReturnThis(),
       traverse: vi.fn(),
+      children: [] as unknown[],
+      add: vi.fn(),
       __type: 'group',
     })),
   };
@@ -113,7 +117,7 @@ describe('tileBuilder', () => {
 
   // ─── Atlas (opção A: 40 ícones únicos) ────────────────────────────────────
 
-  it('atlas configurado: adiciona um topper plane sobre cada tile (80 objetos no total)', async () => {
+  it('atlas configurado: carrega textura e adiciona 40 tiles base (toppers são children)', async () => {
     const makeTex = () => ({ repeat: { set: vi.fn() }, offset: { set: vi.fn() }, clone: vi.fn() });
     const fakeTexture: ReturnType<typeof makeTex> = makeTex();
     fakeTexture.clone.mockImplementation(makeTex);
@@ -127,8 +131,8 @@ describe('tileBuilder', () => {
       },
     };
     await buildTiles(scene, themeWithAtlas, { loadGLTF: vi.fn(), loadTexture });
-    // 40 tiles base + 40 toppers = 80 adds
-    expect(scene.added).toHaveLength(80);
+    // 40 tiles na cena (toppers são parented dentro dos tiles base, não adicionados ao scene root)
+    expect(scene.added).toHaveLength(40);
     expect(loadTexture).toHaveBeenCalledWith('/textures/tile-atlas.png');
   });
 

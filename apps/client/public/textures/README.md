@@ -54,11 +54,11 @@ Em `apps/client/src/three/theme/boardTheme.ts`, no `DEFAULT_THEME` (ou tema cust
 ```ts
 tile: {
   ...,
-  atlas: { url: '/textures/tile-atlas.svg', columns: 8, rows: 5 },
+  atlas: { url: '/textures/tile-atlas.png', columns: 8, rows: 5 },
 },
 dice: {
   ...,
-  atlas: { url: '/textures/dice-atlas.svg', columns: 6, rows: 1 },
+  atlas: { url: '/textures/dice-atlas.png', columns: 6, rows: 1 },
 },
 ```
 
