@@ -2,10 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ─── Mock Three.js (sem WebGL) ────────────────────────────────────────────────
 vi.mock('three', () => {
-  const MockMesh = vi.fn().mockImplementation(() => ({
-    position: { set: vi.fn() },
-    castShadow: false,
-  }));
+  const MockMesh = vi.fn().mockImplementation(() => {
+    const position = {
+      x: 0, y: 0, z: 0,
+      set: vi.fn(function (this: { x: number; y: number; z: number }, x: number, y: number, z: number) {
+        this.x = x; this.y = y; this.z = z;
+      }),
+    };
+    return {
+      position,
+      castShadow: false,
+      // marcador para diferenciar Mesh procedural de clone glTF nas asserções
+      __isCapsule: true,
+    };
+  });
 
   const MockCapsuleGeometry = vi.fn();
   const MockMeshStandardMaterial = vi.fn();
@@ -25,6 +35,7 @@ vi.mock('three', () => {
 
 import * as THREE from 'three';
 import { PawnManager } from '../../three/PawnManager';
+import { DEFAULT_THEME, type BoardTheme } from '../../three/theme/boardTheme';
 
 // ─── RED: falha até PawnManager.ts ser implementado ──────────────────────────
 
@@ -313,5 +324,232 @@ describe('PawnManager — callback onDone', () => {
       manager.update(STEP_DURATION + 0.01);
       manager.update(STEP_DURATION + 0.01);
     }).not.toThrow();
+  });
+});
+
+// ─── RED: corrida do glTF assíncrono ──────────────────────────────────────────
+// Caso de uso: theme.pawn.url está definido, mas o AssetLoader ainda não
+// resolveu o load quando addPawn é chamado. Hoje cai no fallback CapsuleGeometry
+// e nunca mais é trocado — usuário fica com peões capsulares mesmo com .glb
+// presente. A correção: peões capsulares são trocados pelo clone do glTF
+// quando o load resolver, preservando posição e cor.
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface FakeGroup {
+  __isGLTFTemplate?: boolean;
+  __isGLTFClone?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  position: { x: number; y: number; z: number; set: any };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  scale: { set: any };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  traverse: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clone: any;
+}
+
+function makePos() {
+  return {
+    x: 0, y: 0, z: 0,
+    set: vi.fn(function (this: { x: number; y: number; z: number }, x: number, y: number, z: number) {
+      this.x = x; this.y = y; this.z = z;
+    }),
+  };
+}
+
+/**
+ * Aguarda o esvaziamento da fila de microtasks. Um único `await Promise.resolve()`
+ * só drena 1 nível; promessas encadeadas (loadGLTF → .then → .catch) precisam
+ * de uma macrotask para garantir que todos os callbacks tenham rodado.
+ */
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function makeFakeGroup(): FakeGroup {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cloneFn: any = vi.fn(() => {
+    const cloned: FakeGroup = {
+      __isGLTFClone: true,
+      position: makePos(),
+      scale: { set: vi.fn() },
+      traverse: vi.fn(),
+      clone: cloneFn,
+    };
+    return cloned;
+  });
+  return {
+    __isGLTFTemplate: true,
+    position: makePos(),
+    scale: { set: vi.fn() },
+    traverse: vi.fn(),
+    clone: cloneFn,
+  };
+}
+
+describe('PawnManager — glTF assíncrono (race condition)', () => {
+  let scene: THREE.Scene;
+  let theme: BoardTheme;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let assets: any;
+  let resolveLoad: (g: FakeGroup) => void;
+  let rejectLoad: (e: Error) => void;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    scene = new THREE.Scene();
+    theme = JSON.parse(JSON.stringify(DEFAULT_THEME)) as BoardTheme;
+    theme.pawn.url = '/models/pawn.glb';
+    assets = {
+      loadGLTF: vi.fn().mockImplementation(
+        () =>
+          new Promise<FakeGroup>((resolve, reject) => {
+            resolveLoad = resolve;
+            rejectLoad = reject;
+          }),
+      ),
+    };
+  });
+
+  it('com load pendente, addPawn cria CapsuleGeometry como fallback inicial', () => {
+    const manager = new PawnManager(scene, theme, assets);
+    manager.addPawn('p1', 0);
+    expect(THREE.CapsuleGeometry).toHaveBeenCalledTimes(1);
+  });
+
+  it('quando o load resolve, peões capsulares existentes são trocados pelo clone glTF', async () => {
+    const manager = new PawnManager(scene, theme, assets);
+    manager.addPawn('p1', 0);
+    manager.addPawn('p2', 1);
+    const sceneAddBefore = (scene.add as unknown as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    const group = makeFakeGroup();
+    resolveLoad!(group);
+    await flushMicrotasks();
+
+    expect(scene.remove).toHaveBeenCalledTimes(2);
+    expect(group.clone).toHaveBeenCalledTimes(2);
+    expect(
+      (scene.add as unknown as ReturnType<typeof vi.fn>).mock.calls.length,
+    ).toBe(sceneAddBefore + 2);
+  });
+
+  it('upgrade preserva posição (movePawn antes do load → mesmas coords no clone)', async () => {
+    const manager = new PawnManager(scene, theme, assets);
+    manager.addPawn('p1', 0);
+    manager.movePawn('p1', 5);
+
+    const capsule = (THREE.Mesh as unknown as ReturnType<typeof vi.fn>).mock.results[0].value as {
+      position: { x: number; y: number; z: number };
+    };
+    const preX = capsule.position.x;
+    const preY = capsule.position.y;
+    const preZ = capsule.position.z;
+
+    const group = makeFakeGroup();
+    resolveLoad!(group);
+    await flushMicrotasks();
+
+    const cloned = (group.clone.mock.results[0]?.value) as FakeGroup;
+    expect(cloned.position.x).toBe(preX);
+    expect(cloned.position.y).toBe(preY);
+    expect(cloned.position.z).toBe(preZ);
+  });
+
+  it('upgrade aplica cor por jogador no clone (traverse chamado)', async () => {
+    const manager = new PawnManager(scene, theme, assets);
+    manager.addPawn('p2', 1);
+
+    const group = makeFakeGroup();
+    resolveLoad!(group);
+    await flushMicrotasks();
+
+    const cloned = (group.clone.mock.results[0]?.value) as FakeGroup;
+    expect(cloned.traverse).toHaveBeenCalled();
+  });
+
+  it('upgrade aplica scale do tema ao clone', async () => {
+    theme.pawn.scale = 1.7;
+    const manager = new PawnManager(scene, theme, assets);
+    manager.addPawn('p1', 0);
+
+    const group = makeFakeGroup();
+    resolveLoad!(group);
+    await flushMicrotasks();
+
+    const cloned = (group.clone.mock.results[0]?.value) as FakeGroup;
+    expect(cloned.scale.set).toHaveBeenCalledWith(1.7, 1.7, 1.7);
+  });
+
+  it('quando o load rejeita, peões capsulares permanecem (fallback estável)', async () => {
+    const manager = new PawnManager(scene, theme, assets);
+    manager.addPawn('p1', 0);
+
+    rejectLoad!(new Error('parse error'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(scene.remove).not.toHaveBeenCalled();
+    // ainda funcional — addPawn novo continua usando capsula
+    manager.addPawn('p2', 1);
+    expect(THREE.CapsuleGeometry).toHaveBeenCalledTimes(2);
+  });
+
+  it('quando glTF JÁ está cacheado, addPawn posterior clona direto (sem capsula)', async () => {
+    const manager = new PawnManager(scene, theme, assets);
+
+    const group = makeFakeGroup();
+    resolveLoad!(group);
+    await flushMicrotasks();
+
+    manager.addPawn('p1', 0);
+    expect(THREE.CapsuleGeometry).not.toHaveBeenCalled();
+    expect(group.clone).toHaveBeenCalledTimes(1);
+  });
+
+  it('upgrade só ocorre uma vez por peão existente (idempotência)', async () => {
+    const manager = new PawnManager(scene, theme, assets);
+    manager.addPawn('p1', 0);
+    manager.addPawn('p2', 1);
+    manager.addPawn('p3', 2);
+
+    const group = makeFakeGroup();
+    resolveLoad!(group);
+    await flushMicrotasks();
+
+    expect(group.clone).toHaveBeenCalledTimes(3);
+  });
+
+  it('addPawn DEPOIS do upgrade não cria capsula nova', async () => {
+    const manager = new PawnManager(scene, theme, assets);
+    manager.addPawn('p1', 0);
+
+    const group = makeFakeGroup();
+    resolveLoad!(group);
+    await flushMicrotasks();
+    const capsulesAfterUpgrade = (THREE.CapsuleGeometry as unknown as ReturnType<typeof vi.fn>)
+      .mock.calls.length;
+
+    manager.addPawn('p2', 1);
+
+    expect(
+      (THREE.CapsuleGeometry as unknown as ReturnType<typeof vi.fn>).mock.calls.length,
+    ).toBe(capsulesAfterUpgrade);
+    expect(group.clone).toHaveBeenCalledTimes(2);
+  });
+
+  it('sem theme.pawn.url, peões sempre são capsulares (fallback completo)', () => {
+    delete theme.pawn.url;
+    const manager = new PawnManager(scene, theme, assets);
+    manager.addPawn('p1', 0);
+    manager.addPawn('p2', 1);
+    expect(THREE.CapsuleGeometry).toHaveBeenCalledTimes(2);
+    expect(assets.loadGLTF).not.toHaveBeenCalled();
+  });
+
+  it('sem AssetLoader, peões sempre são capsulares mesmo com url no tema', () => {
+    const manager = new PawnManager(scene, theme, null);
+    manager.addPawn('p1', 0);
+    expect(THREE.CapsuleGeometry).toHaveBeenCalledTimes(1);
   });
 });

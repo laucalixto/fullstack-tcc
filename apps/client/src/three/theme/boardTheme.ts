@@ -126,15 +126,16 @@ export interface BoardTheme {
 export const DEFAULT_THEME: BoardTheme = {
   background: {
     color: 0x1a1a2e,
-    fog:   { color: 0x1a1a2e, near: 30, far: 60 },
+    fog: { color: 0x1a1a2e, near: 30, far: 60 },
   },
   lighting: {
     ambientIntensity: 0.5,
-    sunIntensity:     1.2,
-    sunPosition:      [10, 20, 10],
-    toneMapping:      'aces',
-    toneMappingExposure: 1.0,
-    environment:      { type: 'room', intensity: 1.0 },
+    sunIntensity: 1.2,
+    sunPosition: [10, 20, 10],
+    toneMapping: 'aces',
+    toneMappingExposure: 0.8,
+    //environment: { type: 'room', intensity: 1.0 },
+    environment: { type: 'hdr', url: '/env/boiler_room_1k.hdr', intensity: 1.0 }
   },
   tile: {
     scale: 1.0,

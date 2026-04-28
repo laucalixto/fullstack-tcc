@@ -62,11 +62,45 @@ export class PawnManager {
       ? resolveLayout(theme)
       : BOARD_PATH;
 
-    // Preload assíncrono do template glTF quando configurado.
+    // Preload assíncrono do template glTF quando configurado. Se o load
+    // resolver DEPOIS de addPawn já ter sido chamado, peões capsulares
+    // (criados como fallback) são trocados pelo clone do glTF preservando
+    // posição e cor — evita corrida em quem usa addPawn antes do preload.
     if (theme.pawn.url && assets) {
       assets.loadGLTF(theme.pawn.url, 'pawn')
-        .then((group) => { this.gltfTemplate = group; })
+        .then((group) => {
+          this.gltfTemplate = group;
+          this.upgradeProceduralPawnsToGLTF();
+        })
         .catch(() => { this.gltfTemplate = null; /* fallback procedural */ });
+    }
+  }
+
+  /**
+   * Substitui peões capsulares existentes pelo clone do glTF recém-carregado.
+   * Posição (x/y/z) e cor por jogador são preservados. Idempotente: peões já
+   * trocados no Map saem da iteração porque a cópia da lista é tirada uma vez.
+   */
+  private upgradeProceduralPawnsToGLTF(): void {
+    if (!this.gltfTemplate) return;
+    const playerIds = [...this.pawns.keys()];
+    for (const playerId of playerIds) {
+      const oldPawn = this.pawns.get(playerId);
+      if (!oldPawn) continue;
+      const colorIndex = this.colorIndexes.get(playerId) ?? 0;
+      const color = this.theme.pawn.colorsByIndex[colorIndex % this.theme.pawn.colorsByIndex.length]
+                 ?? FALLBACK_PAWN_COLORS[colorIndex % FALLBACK_PAWN_COLORS.length];
+
+      const obj = this.gltfTemplate.clone(true);
+      const s = this.theme.pawn.scale;
+      obj.scale.set(s, s, s);
+      applyPlayerColor(obj, color, this.theme.pawn.bodyMaterialName, true);
+      // Preserva posição do peão antigo (em qualquer lugar do tabuleiro).
+      obj.position.set(oldPawn.position.x, oldPawn.position.y, oldPawn.position.z);
+
+      this.scene.remove(oldPawn);
+      this.scene.add(obj);
+      this.pawns.set(playerId, obj);
     }
   }
 

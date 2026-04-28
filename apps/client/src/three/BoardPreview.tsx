@@ -3,7 +3,8 @@ import type * as THREE from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import GUI from 'lil-gui';
 import { createScene as initThreeScene } from './scene/createScene';
-import { DEFAULT_THEME, type BoardTheme } from './theme/boardTheme';
+import { DEFAULT_THEME, getAllAssetUrls, type BoardTheme } from './theme/boardTheme';
+import { assetManager } from './assets/AssetManager';
 import { gameBus } from './EventBus';
 import type { Player } from '@safety-board/shared';
 import { LAYOUTS } from './layouts';
@@ -56,7 +57,6 @@ export function BoardPreview() {
     const previewState = {
       layoutName: 'classic',
       cleanup: null as (() => void) | null,
-      pawnsTimer: 0 as ReturnType<typeof setTimeout> | 0,
     };
 
     // Spawn de 4 peões dummy para visualizar escala/cor (só no preview).
@@ -69,18 +69,28 @@ export function BoardPreview() {
 
     function buildScene(layoutName: string) {
       previewState.cleanup?.();
-      if (previewState.pawnsTimer) clearTimeout(previewState.pawnsTimer);
 
       // Cópia mutável do tema com layout escolhido. O layout é clonado item
       // a item para não vazar mutações (ex.: setTilePosition) para LAYOUTS.
       const theme: BoardTheme = JSON.parse(JSON.stringify(DEFAULT_THEME));
+      // Ativa o glTF do peão no preview. Se o arquivo não existir, o
+      // PawnManager cai no fallback CapsuleGeometry. Para desativar, comente
+      // a linha abaixo. Para o jogo real usar glTF, mover esta URL para o
+      // DEFAULT_THEME em boardTheme.ts.
+      theme.pawn.url = '/models/pawn.glb';
       const sourceLayout = LAYOUTS[layoutName] ?? LAYOUTS.classic;
       theme.boardLayout = sourceLayout.map((t) => ({ ...t }));
 
       previewState.cleanup = initThreeScene(container!, theme);
       previewState.layoutName = layoutName;
-      // Aguarda 1 frame para garantir que createScene terminou de montar.
-      previewState.pawnsTimer = setTimeout(() => gameBus.emit('players:sync', dummyPlayers), 50);
+      // Pré-carrega todos os assets do tema antes de spawnar os peões dummy.
+      // Evita corrida entre o load do glTF e o players:sync. Se nenhum asset
+      // falhar, peões já saem como clone do glTF; se faltar, PawnManager usa
+      // capsula como fallback (sem quebrar a tela).
+      assetManager
+        .preloadAll(getAllAssetUrls(theme))
+        .catch(() => undefined)
+        .finally(() => gameBus.emit('players:sync', dummyPlayers));
     }
 
     buildScene(previewState.layoutName);
@@ -255,7 +265,6 @@ export function BoardPreview() {
 
     return () => {
       previewState.cleanup?.();
-      if (previewState.pawnsTimer) clearTimeout(previewState.pawnsTimer);
       cancelAnimationFrame(rafId);
       gui.destroy();
       styleEl.remove();
