@@ -40,6 +40,18 @@ export function BoardPreview() {
     const container = containerRef.current;
     if (!container) return;
 
+    // Estilo escopado: o popup nativo dos <select> dentro do lil-gui herda
+    // do tema escuro do GUI cores muito claras contra o fundo branco do SO,
+    // tornando opções inativas quase ilegíveis. Forçamos contraste no popup.
+    const styleEl = document.createElement('style');
+    styleEl.setAttribute('data-board-preview', 'true');
+    styleEl.textContent = `
+      .lil-gui select { color: #1a1a2e; }
+      .lil-gui select option { color: #1a1a2e; background-color: #ffffff; }
+      .lil-gui select option:checked { color: #ffffff; background-color: #2a2a3e; }
+    `;
+    document.head.appendChild(styleEl);
+
     // Estado mutável compartilhado: layout selecionado + cleanup atual.
     const previewState = {
       layoutName: 'classic',
@@ -59,9 +71,11 @@ export function BoardPreview() {
       previewState.cleanup?.();
       if (previewState.pawnsTimer) clearTimeout(previewState.pawnsTimer);
 
-      // Cópia mutável do tema com layout escolhido.
+      // Cópia mutável do tema com layout escolhido. O layout é clonado item
+      // a item para não vazar mutações (ex.: setTilePosition) para LAYOUTS.
       const theme: BoardTheme = JSON.parse(JSON.stringify(DEFAULT_THEME));
-      theme.boardLayout = LAYOUTS[layoutName] ?? LAYOUTS.classic;
+      const sourceLayout = LAYOUTS[layoutName] ?? LAYOUTS.classic;
+      theme.boardLayout = sourceLayout.map((t) => ({ ...t }));
 
       previewState.cleanup = initThreeScene(container!, theme);
       previewState.layoutName = layoutName;
@@ -244,6 +258,7 @@ export function BoardPreview() {
       if (previewState.pawnsTimer) clearTimeout(previewState.pawnsTimer);
       cancelAnimationFrame(rafId);
       gui.destroy();
+      styleEl.remove();
     };
   }, []);
 

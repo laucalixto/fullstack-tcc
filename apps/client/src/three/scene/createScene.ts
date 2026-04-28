@@ -11,6 +11,7 @@ import { startAnimationLoop } from './animationLoop';
 import { bindGameEvents } from './eventBindings';
 import { DEFAULT_THEME, resolveLayout } from '../theme/boardTheme';
 import type { BoardTheme } from '../theme/boardTheme';
+import * as themeMut from '../theme/themeMutators';
 import { assetManager } from '../assets/AssetManager';
 
 /**
@@ -68,33 +69,62 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
     (window as unknown as Record<string, unknown>).__previewHandles__ = {
       setTileScale(s: number) {
         for (const t of tilesRefHolder.tiles) t.scale.set(s, s, s);
+        themeMut.setTileScale(theme, s);
       },
       setTilePosition(index: number, x: number, y: number, z: number) {
         const t = tilesRefHolder.tiles[index];
         if (t) t.position.set(x, y, z);
+        themeMut.setTilePosition(theme, index, x, y, z);
       },
       getTilePosition(index: number): { x: number; y: number; z: number } | null {
         const t = tilesRefHolder.tiles[index];
         return t ? { x: t.position.x, y: t.position.y, z: t.position.z } : null;
       },
-      setAmbientIntensity(v: number) { lightRefs.ambient.intensity = v; },
-      setSunIntensity(v: number)     { lightRefs.sun.intensity = v; },
-      setSunPosition(x: number, y: number, z: number) { lightRefs.sun.position.set(x, y, z); },
-      setFogNear(v: number) { lightRefs.fog.near = v; },
-      setFogFar(v: number)  { lightRefs.fog.far = v; },
-      setFogColor(hex: number) { lightRefs.fog.color.setHex(hex); },
+      setAmbientIntensity(v: number) {
+        lightRefs.ambient.intensity = v;
+        themeMut.setAmbientIntensity(theme, v);
+      },
+      setSunIntensity(v: number) {
+        lightRefs.sun.intensity = v;
+        themeMut.setSunIntensity(theme, v);
+      },
+      setSunPosition(x: number, y: number, z: number) {
+        lightRefs.sun.position.set(x, y, z);
+        themeMut.setSunPosition(theme, x, y, z);
+      },
+      setFogNear(v: number) {
+        lightRefs.fog.near = v;
+        themeMut.setFogNear(theme, v);
+      },
+      setFogFar(v: number) {
+        lightRefs.fog.far = v;
+        themeMut.setFogFar(theme, v);
+      },
+      setFogColor(hex: number) {
+        lightRefs.fog.color.setHex(hex);
+        themeMut.setFogColor(theme, hex);
+      },
       setBackgroundColor(hex: number) {
         if (scene.background instanceof THREE.Color) scene.background.setHex(hex);
         else scene.background = new THREE.Color(hex);
+        themeMut.setBackgroundColor(theme, hex);
       },
       setGroundColor(hex: number) {
         const g = tilesRefHolder.ground as THREE.Mesh | null;
-        if (!g) return;
-        const mat = g.material as THREE.MeshStandardMaterial | undefined;
-        if (mat && mat.color) mat.color.setHex(hex);
+        if (g) {
+          const mat = g.material as THREE.MeshStandardMaterial | undefined;
+          if (mat && mat.color) mat.color.setHex(hex);
+        }
+        themeMut.setGroundColor(theme, hex);
       },
-      setPawnScale(s: number) { pawnManager.setGlobalScale(s); },
-      setToneMappingExposure(v: number) { renderer.toneMappingExposure = v; },
+      setPawnScale(s: number) {
+        pawnManager.setGlobalScale(s);
+        themeMut.setPawnScale(theme, s);
+      },
+      setToneMappingExposure(v: number) {
+        renderer.toneMappingExposure = v;
+        themeMut.setToneMappingExposure(theme, v);
+      },
       setToneMapping(name: 'none' | 'linear' | 'aces' | 'reinhard' | 'cineon') {
         const map: Record<string, THREE.ToneMapping> = {
           none:     THREE.NoToneMapping,
@@ -110,6 +140,7 @@ export function createScene(container: HTMLDivElement, theme: BoardTheme = DEFAU
           if (Array.isArray(mat)) mat.forEach((m) => { (m as THREE.Material).needsUpdate = true; });
           else if (mat) (mat as THREE.Material).needsUpdate = true;
         });
+        themeMut.setToneMapping(theme, name);
       },
       /** Coleta as posições atuais dos 40 tiles para exportar como boardLayout. */
       exportLayout(): Array<{ index: number; x: number; y: number; z: number }> {
