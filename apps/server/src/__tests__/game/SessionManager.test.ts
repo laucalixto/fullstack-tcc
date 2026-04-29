@@ -470,4 +470,26 @@ describe('SessionManager — renamePlayer', () => {
     const { id } = sm.createSession('fac-1');
     expect(() => sm.renamePlayer(id, 'unknown-player', 'Alice Silva')).toThrow('PLAYER_NOT_FOUND');
   });
+
+  it('persiste avatarId quando informado (escolha do CharacterSelect)', () => {
+    const sm = new SessionManager();
+    const { pin } = sm.createSession('fac-1');
+    const { playerId } = sm.joinSession(pin, 'Jogador');
+    const sessionId = sm.getByPin(pin)!.id;
+    sm.renamePlayer(sessionId, playerId, 'Alice Silva', 'tech');
+    const player = sm.getById(sessionId)!.players.find((p) => p.id === playerId);
+    expect(player?.avatarId).toBe('tech');
+  });
+
+  it('mantém avatarId previamente setado quando renomeação não passa um novo', () => {
+    const sm = new SessionManager();
+    const { pin } = sm.createSession('fac-1');
+    const { playerId } = sm.joinSession(pin, 'Jogador');
+    const sessionId = sm.getByPin(pin)!.id;
+    sm.renamePlayer(sessionId, playerId, 'Alice', 'admin');
+    sm.renamePlayer(sessionId, playerId, 'Alice Silva'); // sem avatarId
+    const player = sm.getById(sessionId)!.players.find((p) => p.id === playerId);
+    expect(player?.avatarId).toBe('admin');
+    expect(player?.name).toBe('Alice Silva');
+  });
 });

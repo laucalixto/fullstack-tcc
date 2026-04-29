@@ -25,11 +25,20 @@ vi.mock('three', () => {
     remove: vi.fn(),
   }));
 
+  // Box3.setFromObject(group).min — PawnManager usa para medir o pivô do glTF
+  // e descobrir o offset Y de pousio do peão sobre o tile.
+  const MockBox3 = vi.fn().mockImplementation(() => ({
+    setFromObject: vi.fn().mockReturnThis(),
+    min: { x: 0, y: 0, z: 0 },
+    max: { x: 0, y: 0, z: 0 },
+  }));
+
   return {
     CapsuleGeometry: MockCapsuleGeometry,
     MeshStandardMaterial: MockMeshStandardMaterial,
     Mesh: MockMesh,
     Scene: MockScene,
+    Box3: MockBox3,
   };
 });
 
@@ -135,7 +144,9 @@ describe('PawnManager', () => {
 // Tiles 1 (y=0.0) → 3 (y=0.0): Δy=0  → sem salto (mesma altura)
 
 const STEP_DURATION = 0.12; // deve coincidir com a constante interna
-const PAWN_Y_OFFSET = 0.65;
+// Default procedural após refactor (era 0.65 antes; agora 0.35 — cápsula
+// pousa exatamente no tile, alinhado ao comportamento do glTF bbox-derived).
+const PAWN_Y_OFFSET = 0.35;
 
 // Helper: retorna o mesh criado pelo índice de construção (em ordem de addPawn)
 function getMeshAt(index: number) {
@@ -551,5 +562,143 @@ describe('PawnManager — glTF assíncrono (race condition)', () => {
     const manager = new PawnManager(scene, theme, null);
     manager.addPawn('p1', 0);
     expect(THREE.CapsuleGeometry).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── RED: matcher robusto da mesh do corpo (Blender renomeia) ────────────────
+// Bug: applyPlayerColor faz `child.name === bodyMeshName` (exato, case-sensitive).
+// O exporter glTF do Blender frequentemente sufixa (`pawn-body.001`) ou muda
+// capitalização — o match falha silenciosamente e o peão fica com a cor
+// original do .glb. Fix: aceitar nomes que **começam** com bodyMeshName,
+// case-insensitive. Quando nada bate, emitir console.warn listando as meshes
+// encontradas — diagnóstico imediato para o dev renomear no Outliner.
+
+interface FakeMesh {
+  isMesh: true;
+  name: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  material: any;
+}
+
+function makeFakeGroupWithMeshes(meshNames: string[]): FakeGroup & { _meshes: FakeMesh[] } {
+  const meshes: FakeMesh[] = meshNames.map((name) => ({
+    isMesh: true as const,
+    name,
+    material: { isOriginal: true },
+  }));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const traverse: any = vi.fn((cb: (child: FakeMesh) => void) => {
+    for (const m of meshes) cb(m);
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cloneFn: any = vi.fn(() => {
+    const cloneMeshes: FakeMesh[] = meshNames.map((name) => ({
+      isMesh: true as const,
+      name,
+      material: { isOriginal: true },
+    }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cloneTraverse: any = vi.fn((cb: (child: FakeMesh) => void) => {
+      for (const m of cloneMeshes) cb(m);
+    });
+    const cloned: FakeGroup & { _meshes: FakeMesh[] } = {
+      __isGLTFClone: true,
+      position: makePos(),
+      scale: { set: vi.fn() },
+      traverse: cloneTraverse,
+      clone: cloneFn,
+      _meshes: cloneMeshes,
+    };
+    return cloned;
+  });
+  return {
+    __isGLTFTemplate: true,
+    position: makePos(),
+    scale: { set: vi.fn() },
+    traverse,
+    clone: cloneFn,
+    _meshes: meshes,
+  };
+}
+
+describe('PawnManager — matcher de mesh do corpo (robusto a Blender)', () => {
+  let scene: THREE.Scene;
+  let theme: BoardTheme;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let assets: any;
+  let resolveLoad: (g: FakeGroup) => void;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    scene = new THREE.Scene();
+    theme = JSON.parse(JSON.stringify(DEFAULT_THEME)) as BoardTheme;
+    theme.pawn.url = '/models/pawn.glb';
+    theme.pawn.bodyMaterialName = 'pawn-body';
+    assets = {
+      loadGLTF: vi.fn().mockImplementation(
+        () =>
+          new Promise<FakeGroup>((resolve) => {
+            resolveLoad = resolve;
+          }),
+      ),
+    };
+  });
+
+  it('aceita mesh nomeada exatamente "pawn-body" (caso comum)', async () => {
+    const manager = new PawnManager(scene, theme, assets);
+    const group = makeFakeGroupWithMeshes(['pawn-body', 'pawn-details']);
+    resolveLoad!(group);
+    await flushMicrotasks();
+    manager.addPawn('p1', 0, 0xff0000);
+    const cloned = (group.clone.mock.results[0].value) as FakeGroup & { _meshes: FakeMesh[] };
+    const body = cloned._meshes.find((m) => m.name === 'pawn-body');
+    expect(body?.material).not.toEqual({ isOriginal: true });
+  });
+
+  it('aceita mesh com sufixo Blender ".001" (pawn-body.001)', async () => {
+    const manager = new PawnManager(scene, theme, assets);
+    const group = makeFakeGroupWithMeshes(['pawn-body.001', 'pawn-details']);
+    resolveLoad!(group);
+    await flushMicrotasks();
+    manager.addPawn('p1', 0, 0xff0000);
+    const cloned = (group.clone.mock.results[0].value) as FakeGroup & { _meshes: FakeMesh[] };
+    const body = cloned._meshes.find((m) => m.name === 'pawn-body.001');
+    expect(body?.material).not.toEqual({ isOriginal: true });
+  });
+
+  it('aceita mesh com capitalização diferente (Pawn-Body)', async () => {
+    const manager = new PawnManager(scene, theme, assets);
+    const group = makeFakeGroupWithMeshes(['Pawn-Body']);
+    resolveLoad!(group);
+    await flushMicrotasks();
+    manager.addPawn('p1', 0, 0xff0000);
+    const cloned = (group.clone.mock.results[0].value) as FakeGroup & { _meshes: FakeMesh[] };
+    expect(cloned._meshes[0].material).not.toEqual({ isOriginal: true });
+  });
+
+  it('sem mesh que case com bodyMeshName, emite console.warn listando os nomes encontrados', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const manager = new PawnManager(scene, theme, assets);
+    const group = makeFakeGroupWithMeshes(['Cube', 'Mesh001']);
+    resolveLoad!(group);
+    await flushMicrotasks();
+    manager.addPawn('p1', 0, 0xff0000);
+    expect(warn).toHaveBeenCalled();
+    const msg = (warn.mock.calls[0]?.[0] ?? '') as string;
+    expect(msg).toContain('pawn-body');
+    expect(msg).toMatch(/Cube/);
+    expect(msg).toMatch(/Mesh001/);
+    warn.mockRestore();
+  });
+
+  it('NÃO emite warning quando ao menos uma mesh bate', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const manager = new PawnManager(scene, theme, assets);
+    const group = makeFakeGroupWithMeshes(['pawn-body', 'pawn-details']);
+    resolveLoad!(group);
+    await flushMicrotasks();
+    manager.addPawn('p1', 0, 0xff0000);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

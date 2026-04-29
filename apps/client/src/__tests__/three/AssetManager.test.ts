@@ -180,6 +180,22 @@ describe('AssetManager', () => {
     warn.mockRestore();
   });
 
+  it('validateScale aceita peão pequeno (0.25m) — faixa relaxada para 0.1–2.5m', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    loadedGroups.set('/models/small-pawn.glb', { sizeX: 0.15, sizeY: 0.25, sizeZ: 0.15 });
+    await mgr.loadGLTF('/models/small-pawn.glb', 'pawn');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('validateScale ainda emite warning para peão muito pequeno (0.05m, abaixo de 0.1m)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    loadedGroups.set('/models/tiny-pawn.glb', { sizeX: 0.05, sizeY: 0.05, sizeZ: 0.05 });
+    await mgr.loadGLTF('/models/tiny-pawn.glb', 'pawn');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('validateScale pula verificação quando category é "unknown"', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     loadedGroups.set('/models/whatever.glb', { sizeX: 100, sizeY: 100, sizeZ: 100 });

@@ -304,7 +304,10 @@ describe('PATCH /api/manager/players/:id — validation error', () => {
     token = await registerAndLogin(app);
   });
 
-  it('retorna 400 para body inválido (totalScore negativo)', async () => {
+  // Tiles podem subtrair pontos durante a partida — scores negativos são
+  // legítimos. O gestor precisa conseguir editar pontuações negativas para
+  // corrigir dados. Validação de tipo (int) permanece.
+  it('aceita totalScore negativo (gestor pode corrigir pontuação para baixo)', async () => {
     const reg = await request(app).post('/api/players/register').send({
       firstName: 'X', lastName: 'Y', email: 'xy@test.com',
       industrialUnit: 'U', password: 'Senha@123',
@@ -313,7 +316,21 @@ describe('PATCH /api/manager/players/:id — validation error', () => {
     const res = await request(app)
       .patch(`/api/manager/players/${playerId}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ totalScore: -1 });
+      .send({ totalScore: -15 });
+    expect(res.status).toBe(200);
+    expect(res.body.totalScore).toBe(-15);
+  });
+
+  it('retorna 400 para totalScore não-inteiro', async () => {
+    const reg = await request(app).post('/api/players/register').send({
+      firstName: 'A', lastName: 'B', email: 'ab@test.com',
+      industrialUnit: 'U', password: 'Senha@123',
+    });
+    const playerId = reg.body.playerId;
+    const res = await request(app)
+      .patch(`/api/manager/players/${playerId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ totalScore: 'not-a-number' });
     expect(res.status).toBe(400);
   });
 });

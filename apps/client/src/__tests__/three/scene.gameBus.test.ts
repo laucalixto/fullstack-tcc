@@ -2,12 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ─── vi.hoisted: variáveis disponíveis antes das factories dos mocks ──────────
 const pawnMock = vi.hoisted(() => ({
-  addPawn:     vi.fn(),
-  movePawn:    vi.fn(),
-  removePawn:  vi.fn(),
-  animatePawn: vi.fn(),
-  isAnimating: vi.fn(() => false),
-  update:      vi.fn(),
+  addPawn:       vi.fn(),
+  movePawn:      vi.fn(),
+  removePawn:    vi.fn(),
+  animatePawn:   vi.fn(),
+  isAnimating:   vi.fn(() => false),
+  update:        vi.fn(),
+  setPawnColor:  vi.fn(),
 }));
 
 // ─── Mocks Three.js (sem WebGL) ──────────────────────────────────────────────
@@ -156,7 +157,7 @@ describe('scene — gameBus → PawnManager', () => {
 
   it('players:sync adiciona peão para novo jogador', () => {
     gameBus.emit('players:sync', [makePlayer('p1')]);
-    expect(pawnMock.addPawn).toHaveBeenCalledWith('p1', 0);
+    expect(pawnMock.addPawn).toHaveBeenCalledWith('p1', 0, expect.any(Number));
   });
 
   it('players:sync move peão imediatamente ao adicionar', () => {
@@ -176,11 +177,11 @@ describe('scene — gameBus → PawnManager', () => {
     expect(pawnMock.animatePawn).toHaveBeenCalledWith('p1', 0, 8, undefined);
   });
 
-  it('players:sync com múltiplos jogadores adiciona todos com colorIndex correto', () => {
+  it('players:sync com múltiplos jogadores adiciona todos com slotIndex correto', () => {
     gameBus.emit('players:sync', [makePlayer('p1'), makePlayer('p2'), makePlayer('p3')]);
-    expect(pawnMock.addPawn).toHaveBeenCalledWith('p1', 0);
-    expect(pawnMock.addPawn).toHaveBeenCalledWith('p2', 1);
-    expect(pawnMock.addPawn).toHaveBeenCalledWith('p3', 2);
+    expect(pawnMock.addPawn).toHaveBeenCalledWith('p1', 0, expect.any(Number));
+    expect(pawnMock.addPawn).toHaveBeenCalledWith('p2', 1, expect.any(Number));
+    expect(pawnMock.addPawn).toHaveBeenCalledWith('p3', 2, expect.any(Number));
   });
 
   it('cleanup remove subscription: players:sync não afeta PawnManager após cleanup', () => {

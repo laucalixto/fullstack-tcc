@@ -15,7 +15,14 @@ const TILE_OFFSETS: ReadonlyArray<[number, number]> = [
 ];
 
 const STEP_DURATION  = 0.12;  // segundos por tile na animação
-const PAWN_Y_OFFSET  = 0.65;  // altura do peão acima da superfície do tile
+/**
+ * Offset Y default do peão procedural: metade da altura da CapsuleGeometry
+ * (~70cm) — encaixa o fundo da cápsula exatamente sobre o tile. No modo glTF,
+ * `PawnManager` mede o bounding box e sobrescreve este valor com `-bbox.min.y`,
+ * pousando o fundo do modelo independentemente de onde o pivô foi posicionado
+ * no Blender. `theme.pawn.yOffset` (opcional) tem precedência sobre ambos.
+ */
+const PROCEDURAL_Y_OFFSET = 0.35;
 const JUMP_HEIGHT    = 0.4;   // amplitude do arco ao subir de nível
 const JUMP_THRESHOLD = 0.3;   // Δy mínimo para acionar o salto
 
@@ -24,8 +31,11 @@ interface PawnAnim { steps: PawnStep[]; stepIdx: number; t: number; onDone?: () 
 
 /**
  * Aplica a cor do jogador ao Object3D do peão. No modo procedural, cria material
- * novo. No modo glTF, procura mesh com nome `theme.pawn.bodyMaterialName` e
- * substitui o material dessa mesh. Veja `_docs_refs/MODELING.md` para convenção de naming.
+ * novo. No modo glTF, procura mesh cujo nome **comece** com
+ * `theme.pawn.bodyMaterialName` (case-insensitive) — cobre `pawn-body`,
+ * `pawn-body.001` (sufixo do Blender), `Pawn-Body` etc. Quando nada bate,
+ * emite warning listando todas as meshes encontradas para o dev renomear no
+ * Outliner. Veja `_docs_refs/MODELING.md §4` para a convenção.
  */
 function applyPlayerColor(obj: THREE.Object3D, color: number, bodyMeshName: string, isGLTF: boolean): void {
   if (!isGLTF) {
@@ -35,22 +45,45 @@ function applyPlayerColor(obj: THREE.Object3D, color: number, bodyMeshName: stri
     }
     return;
   }
+  const target = bodyMeshName.toLowerCase();
+  const seen: string[] = [];
+  let matched = false;
   obj.traverse((child) => {
-    if ((child as THREE.Mesh).isMesh && child.name === bodyMeshName) {
+    if (!(child as THREE.Mesh).isMesh) return;
+    seen.push(child.name);
+    if (child.name.toLowerCase().startsWith(target)) {
       (child as THREE.Mesh).material = new THREE.MeshStandardMaterial({ color });
+      matched = true;
     }
   });
+  if (!matched && seen.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[PawnManager] mesh começando com "${bodyMeshName}" não encontrada no glTF; `
+        + `cor do jogador não aplicada. Meshes encontradas: [${seen.join(', ')}]. `
+        + 'Renomeie a malha do corpo no Outliner do Blender (veja MODELING.md §4).',
+    );
+  }
 }
 
 export class PawnManager {
-  private readonly pawns        = new Map<string, THREE.Object3D>();
-  private readonly colorIndexes = new Map<string, number>();
-  private readonly animations   = new Map<string, PawnAnim>();
+  private readonly pawns      = new Map<string, THREE.Object3D>();
+  /** Slot 0–3 do jogador na ordem de entrada — define o quadrante em TILE_OFFSETS. */
+  private readonly slots      = new Map<string, number>();
+  /** Cor hex final aplicada (resolvida do avatar; com variação quando duplicado). */
+  private readonly colors     = new Map<string, number>();
+  private readonly animations = new Map<string, PawnAnim>();
   private readonly scene: THREE.Scene;
   private readonly theme: BoardTheme;
   private readonly assets: AssetLoader | null;
   private readonly layout: TilePosition[];
   private gltfTemplate: THREE.Group | null = null;
+  /**
+   * Offset Y vigente. Inicia em `theme.pawn.yOffset` (se definido) ou
+   * `PROCEDURAL_Y_OFFSET` (fallback). Ao carregar glTF, recalculado via
+   * bounding box para pousar o fundo do modelo no tile.
+   */
+  private yOffset: number;
 
   constructor(scene: THREE.Scene, theme: BoardTheme = DEFAULT_THEME, assets: AssetLoader | null = null) {
     this.scene = scene;
@@ -61,6 +94,8 @@ export class PawnManager {
     this.layout = (theme.boardLayout || theme === DEFAULT_THEME)
       ? resolveLayout(theme)
       : BOARD_PATH;
+    // Override do tema tem precedência; senão default procedural.
+    this.yOffset = theme.pawn.yOffset ?? PROCEDURAL_Y_OFFSET;
 
     // Preload assíncrono do template glTF quando configurado. Se o load
     // resolver DEPOIS de addPawn já ter sido chamado, peões capsulares
@@ -70,6 +105,13 @@ export class PawnManager {
       assets.loadGLTF(theme.pawn.url, 'pawn')
         .then((group) => {
           this.gltfTemplate = group;
+          // Mede o bbox do template uma vez para descobrir onde está o fundo
+          // do modelo (pivô pode estar em qualquer lugar). Override do tema
+          // ainda tem precedência se definido explicitamente.
+          if (theme.pawn.yOffset === undefined) {
+            const min = new THREE.Box3().setFromObject(group).min;
+            this.yOffset = -min.y;
+          }
           this.upgradeProceduralPawnsToGLTF();
         })
         .catch(() => { this.gltfTemplate = null; /* fallback procedural */ });
@@ -87,9 +129,7 @@ export class PawnManager {
     for (const playerId of playerIds) {
       const oldPawn = this.pawns.get(playerId);
       if (!oldPawn) continue;
-      const colorIndex = this.colorIndexes.get(playerId) ?? 0;
-      const color = this.theme.pawn.colorsByIndex[colorIndex % this.theme.pawn.colorsByIndex.length]
-                 ?? FALLBACK_PAWN_COLORS[colorIndex % FALLBACK_PAWN_COLORS.length];
+      const color = this.colors.get(playerId) ?? FALLBACK_PAWN_COLORS[0];
 
       const obj = this.gltfTemplate.clone(true);
       const s = this.theme.pawn.scale;
@@ -104,9 +144,17 @@ export class PawnManager {
     }
   }
 
-  addPawn(playerId: string, colorIndex: number): void {
-    const color = this.theme.pawn.colorsByIndex[colorIndex % this.theme.pawn.colorsByIndex.length]
-               ?? FALLBACK_PAWN_COLORS[colorIndex % FALLBACK_PAWN_COLORS.length];
+  /**
+   * @param slotIndex 0–3 — quadrante onde o peão se posiciona no tile (até 4
+   *  jogadores no mesmo tile sem sobreposição).
+   * @param color Cor hex final do peão (resolvida via `pawnColors.resolvePawnColor`).
+   *  Se omitido, recai na paleta `theme.pawn.colorsByIndex[slotIndex]` para
+   *  preservar comportamento legado em testes/uso direto.
+   */
+  addPawn(playerId: string, slotIndex: number, color?: number): void {
+    const finalColor = color ??
+      this.theme.pawn.colorsByIndex[slotIndex % this.theme.pawn.colorsByIndex.length] ??
+      FALLBACK_PAWN_COLORS[slotIndex % FALLBACK_PAWN_COLORS.length];
 
     let obj: THREE.Object3D;
     if (this.theme.pawn.url && this.gltfTemplate) {
@@ -114,11 +162,11 @@ export class PawnManager {
       obj = this.gltfTemplate.clone(true);
       const s = this.theme.pawn.scale;
       obj.scale.set(s, s, s);
-      applyPlayerColor(obj, color, this.theme.pawn.bodyMaterialName, true);
+      applyPlayerColor(obj, finalColor, this.theme.pawn.bodyMaterialName, true);
     } else {
       // Procedural: CapsuleGeometry (~70cm altura).
       const geometry = new THREE.CapsuleGeometry(0.15, 0.4, 4, 8);
-      const material = new THREE.MeshStandardMaterial({ color });
+      const material = new THREE.MeshStandardMaterial({ color: finalColor });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.castShadow = true;
       obj = mesh;
@@ -126,7 +174,17 @@ export class PawnManager {
 
     this.scene.add(obj);
     this.pawns.set(playerId, obj);
-    this.colorIndexes.set(playerId, colorIndex);
+    this.slots.set(playerId, slotIndex);
+    this.colors.set(playerId, finalColor);
+  }
+
+  /** Atualiza a cor do peão (usado ao "upgrade" de cor pós-resolução de avatar). */
+  setPawnColor(playerId: string, color: number): void {
+    const pawn = this.pawns.get(playerId);
+    if (!pawn) return;
+    this.colors.set(playerId, color);
+    const isGLTF = !!(this.theme.pawn.url && this.gltfTemplate);
+    applyPlayerColor(pawn, color, this.theme.pawn.bodyMaterialName, isGLTF);
   }
 
   /** Teleporta instantaneamente (para sync inicial ou posição forçada). */
@@ -134,9 +192,9 @@ export class PawnManager {
     const pawn = this.pawns.get(playerId);
     if (!pawn) return;
     const tile = this.layout[tileIndex];
-    const idx = this.colorIndexes.get(playerId) ?? 0;
+    const idx = this.slots.get(playerId) ?? 0;
     const [ox, oz] = TILE_OFFSETS[idx % TILE_OFFSETS.length];
-    pawn.position.set(tile.x + ox, tile.y + PAWN_Y_OFFSET, tile.z + oz);
+    pawn.position.set(tile.x + ox, tile.y + this.yOffset, tile.z + oz);
   }
 
   animatePawn(playerId: string, fromIndex: number, toIndex: number, onDone?: () => void): void {
@@ -164,8 +222,8 @@ export class PawnManager {
       const step     = anim.steps[anim.stepIdx];
       const fromTile = this.layout[step.from];
       const toTile   = this.layout[step.to];
-      const colorIdx = this.colorIndexes.get(playerId) ?? 0;
-      const [ox, oz] = TILE_OFFSETS[colorIdx % TILE_OFFSETS.length];
+      const slotIdx = this.slots.get(playerId) ?? 0;
+      const [ox, oz] = TILE_OFFSETS[slotIdx % TILE_OFFSETS.length];
 
       anim.t = Math.min(anim.t + delta / STEP_DURATION, 1);
       const t = anim.t;
@@ -173,8 +231,8 @@ export class PawnManager {
       const x = fromTile.x + ox + (toTile.x - fromTile.x) * t;
       const z = fromTile.z + oz + (toTile.z - fromTile.z) * t;
 
-      const yFrom = fromTile.y + PAWN_Y_OFFSET;
-      const yTo   = toTile.y   + PAWN_Y_OFFSET;
+      const yFrom = fromTile.y + this.yOffset;
+      const yTo   = toTile.y   + this.yOffset;
       const dyAbs = Math.abs(toTile.y - fromTile.y);
       const arc   = dyAbs >= JUMP_THRESHOLD ? JUMP_HEIGHT * Math.sin(t * Math.PI) : 0;
       const y     = yFrom + (yTo - yFrom) * t + arc;

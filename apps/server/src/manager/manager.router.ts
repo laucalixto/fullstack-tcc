@@ -190,7 +190,9 @@ export function createManagerRouter(
     firstName: z.string().min(1).optional(),
     lastName: z.string().min(1).optional(),
     industrialUnit: z.string().min(1).optional(),
-    totalScore: z.number().int().min(0).optional(),
+    // Tiles podem subtrair pontos — score negativo é legítimo. Gestor precisa
+    // editar livremente para corrigir dados. Mantemos só a restrição de tipo.
+    totalScore: z.number().int().optional(),
   });
 
   router.patch('/players/:id', (req, res) => {

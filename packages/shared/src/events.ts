@@ -167,6 +167,9 @@ export interface PlayerRenamePayload {
   sessionId: string;
   playerId: string;
   name: string; // nome completo: firstName + " " + lastName
+  /** Avatar escolhido no CharacterSelect (id da lista AVATARS). Opcional para
+   *  retrocompat com clientes antigos. Quando ausente, server preserva o atual. */
+  avatarId?: string;
 }
 
 export interface TileEffectPayload {
