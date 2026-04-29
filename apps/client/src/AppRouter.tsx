@@ -383,7 +383,17 @@ function PlayerSignupPage() {
         setError('E-mail já cadastrado.');
         return;
       }
-      if (!res.ok) throw new Error('Erro ao cadastrar.');
+      if (res.status === 400) {
+        // Erro de validação do server — diferencia de "perda de conexão" para
+        // não confundir o usuário (pré-fix dessa diferenciação, scores negativos
+        // chegavam aqui e a mensagem dizia "Não foi possível conectar").
+        setError('Dados inválidos. Verifique os campos e tente novamente.');
+        return;
+      }
+      if (!res.ok) {
+        setError(`Erro do servidor (HTTP ${res.status}). Tente novamente.`);
+        return;
+      }
       navigate('/ranking');
     } catch {
       setError('Não foi possível conectar ao servidor.');

@@ -67,4 +67,42 @@ describe('ManagerPlayersPage', () => {
     render(<ManagerPlayersPage players={[]} onSave={vi.fn()} />);
     expect(screen.queryAllByTestId(/^player-row-/)).toHaveLength(0);
   });
+
+  // ─── Score negativo via digitação direta ─────────────────────────────────
+  // Bug: input type="number" com onChange={Number(e.target.value)} descarta o
+  // "-" durante digitação parcial (Number("-") = NaN → coerção para 0). Setas
+  // do spinner funcionam porque entregam valor completo. Fix: aceitar "-" e
+  // string vazia como estados transicionais.
+  it('aceita digitar "-15" diretamente no campo de score (não zera no "-")', () => {
+    const onSave = vi.fn();
+    render(<ManagerPlayersPage players={makePlayers(1)} onSave={onSave} />);
+    fireEvent.click(screen.getByTestId('player-edit-p-0'));
+    const input = screen.getByTestId('player-input-score-p-0') as HTMLInputElement;
+    // Simulação de digitação progressiva — primeiro o "-", depois "-15"
+    fireEvent.change(input, { target: { value: '-' } });
+    // Não deve voltar pra 0 — o usuário ainda está digitando
+    expect(input.value).not.toBe('0');
+    fireEvent.change(input, { target: { value: '-15' } });
+    expect(input.value).toBe('-15');
+    fireEvent.click(screen.getByTestId('player-save-p-0'));
+    expect(onSave).toHaveBeenCalledWith('p-0', expect.objectContaining({ totalScore: -15 }));
+  });
+
+  it('aceita digitar números positivos sem regressão', () => {
+    const onSave = vi.fn();
+    render(<ManagerPlayersPage players={makePlayers(1)} onSave={onSave} />);
+    fireEvent.click(screen.getByTestId('player-edit-p-0'));
+    fireEvent.change(screen.getByTestId('player-input-score-p-0'), { target: { value: '250' } });
+    fireEvent.click(screen.getByTestId('player-save-p-0'));
+    expect(onSave).toHaveBeenCalledWith('p-0', expect.objectContaining({ totalScore: 250 }));
+  });
+
+  it('campo vazio durante edição é tratado como 0 ao salvar', () => {
+    const onSave = vi.fn();
+    render(<ManagerPlayersPage players={makePlayers(1)} onSave={onSave} />);
+    fireEvent.click(screen.getByTestId('player-edit-p-0'));
+    fireEvent.change(screen.getByTestId('player-input-score-p-0'), { target: { value: '' } });
+    fireEvent.click(screen.getByTestId('player-save-p-0'));
+    expect(onSave).toHaveBeenCalledWith('p-0', expect.objectContaining({ totalScore: 0 }));
+  });
 });

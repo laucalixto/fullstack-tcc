@@ -2,12 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { DEFAULT_THEME, getAllAssetUrls, type BoardTheme } from '../../three/theme/boardTheme';
 
 describe('boardTheme', () => {
-  it('DEFAULT_THEME não tem URLs de modelos glTF (procedural puro)', () => {
+  // Tile/ground/dice continuam sem URL no default — caem no procedural.
+  // Pawn passou a ter URL ativada permanentemente (`/models/pawn.glb`)
+  // para que o jogo real use o modelo glTF, com fallback para CapsuleGeometry
+  // se o arquivo não existir/falhar (PawnManager mantém o fallback).
+  it('DEFAULT_THEME tile/ground/dice continuam procedural (sem URL)', () => {
     expect(DEFAULT_THEME.tile.url).toBeUndefined();
-    expect(DEFAULT_THEME.pawn.url).toBeUndefined();
     expect(DEFAULT_THEME.ground.url).toBeUndefined();
     expect(DEFAULT_THEME.dice.url).toBeUndefined();
     expect(DEFAULT_THEME.decorations).toEqual([]);
+  });
+
+  it('DEFAULT_THEME pawn tem url e yOffset configurados (modelo glTF ativo)', () => {
+    expect(DEFAULT_THEME.pawn.url).toBe('/models/pawn.glb');
+    expect(typeof DEFAULT_THEME.pawn.yOffset).toBe('number');
   });
 
   it('DEFAULT_THEME tem atlas de tile e dado configurados (placeholders PNG)', () => {
@@ -25,8 +33,9 @@ describe('boardTheme', () => {
     expect(DEFAULT_THEME.pawn.colorsByIndex).toEqual([0xe63946, 0x457b9d, 0x2a9d8f, 0xf4a261]);
   });
 
-  it('getAllAssetUrls do default retorna apenas as URLs dos atlases placeholder', () => {
+  it('getAllAssetUrls do default inclui atlases e o modelo glTF do peão', () => {
     expect(getAllAssetUrls(DEFAULT_THEME).sort()).toEqual([
+      '/models/pawn.glb',
       '/textures/dice-atlas.png',
       '/textures/tile-atlas.png',
     ]);

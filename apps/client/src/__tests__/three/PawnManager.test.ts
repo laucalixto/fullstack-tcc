@@ -144,9 +144,10 @@ describe('PawnManager', () => {
 // Tiles 1 (y=0.0) → 3 (y=0.0): Δy=0  → sem salto (mesma altura)
 
 const STEP_DURATION = 0.12; // deve coincidir com a constante interna
-// Default procedural após refactor (era 0.65 antes; agora 0.35 — cápsula
-// pousa exatamente no tile, alinhado ao comportamento do glTF bbox-derived).
-const PAWN_Y_OFFSET = 0.35;
+// Lê o yOffset efetivo do DEFAULT_THEME usado pelo PawnManager — mantém
+// o teste alinhado quando o tema for tunado (procedural=0.35 default; quando
+// theme.pawn.yOffset está definido, prevalece sobre o constante interna).
+const PAWN_Y_OFFSET = DEFAULT_THEME.pawn.yOffset ?? 0.35;
 
 // Helper: retorna o mesh criado pelo índice de construção (em ordem de addPawn)
 function getMeshAt(index: number) {
