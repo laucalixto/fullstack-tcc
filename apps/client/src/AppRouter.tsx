@@ -19,6 +19,7 @@ import { BoardPreview } from './three/BoardPreview';
 import { PodiumResults } from './results/PodiumResults';
 import { IndividualCard } from './results/IndividualCard';
 import { PlayerSignup } from './results/PlayerSignup';
+import { pickMyScore } from './results/sessionScore';
 import { GlobalLeaderboard } from './results/GlobalLeaderboard';
 import { ManagerLogin } from './manager/ManagerLogin';
 import { ManagerDashboard } from './manager/ManagerDashboard';
@@ -139,7 +140,7 @@ function CharacterSelectPage() {
     const fullName = `${firstName} ${lastName}`;
     setPendingPlayer(fullName, avatarId);
     if (session?.id && myPlayerId) {
-      socket.emit(EVENTS.PLAYER_RENAME, { sessionId: session.id, playerId: myPlayerId, name: fullName });
+      socket.emit(EVENTS.PLAYER_RENAME, { sessionId: session.id, playerId: myPlayerId, name: fullName, avatarId });
     }
     navigate('/lobby');
   }, [navigate, session?.id, myPlayerId, setPendingPlayer]);
@@ -361,6 +362,7 @@ function IndividualResultPage() {
 function PlayerSignupPage() {
   const navigate = useNavigate();
   const gameResult = useGameStore((s) => s.gameResult);
+  const myPlayerId = useGameStore((s) => s.myPlayerId);
   const [error, setError] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -368,7 +370,7 @@ function PlayerSignupPage() {
     setIsLoading(true);
     setError(undefined);
     try {
-      const sessionScore = gameResult?.players.find((p) => p.playerId)?.score;
+      const sessionScore = pickMyScore(gameResult, myPlayerId);
       const res = await fetch(
         `${import.meta.env.VITE_SERVER_URL ?? ''}/api/players/register`,
         {
@@ -381,14 +383,24 @@ function PlayerSignupPage() {
         setError('E-mail já cadastrado.');
         return;
       }
-      if (!res.ok) throw new Error('Erro ao cadastrar.');
+      if (res.status === 400) {
+        // Erro de validação do server — diferencia de "perda de conexão" para
+        // não confundir o usuário (pré-fix dessa diferenciação, scores negativos
+        // chegavam aqui e a mensagem dizia "Não foi possível conectar").
+        setError('Dados inválidos. Verifique os campos e tente novamente.');
+        return;
+      }
+      if (!res.ok) {
+        setError(`Erro do servidor (HTTP ${res.status}). Tente novamente.`);
+        return;
+      }
       navigate('/ranking');
     } catch {
       setError('Não foi possível conectar ao servidor.');
     } finally {
       setIsLoading(false);
     }
-  }, [navigate, gameResult]);
+  }, [navigate, gameResult, myPlayerId]);
 
   return <PlayerSignup onSignup={handleSignup} error={error} isLoading={isLoading} />;
 }

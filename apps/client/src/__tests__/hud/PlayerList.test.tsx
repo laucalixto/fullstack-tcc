@@ -64,4 +64,29 @@ describe('PlayerList', () => {
     expect(screen.getByTestId('player-list-item-p1')).toHaveTextContent('10');
     expect(screen.getByTestId('player-list-item-p1')).toHaveTextContent('2');
   });
+
+  // ─── HUD timing: peão ainda pousando ─────────────────────────────────────
+  // Quando o peão do jogador anterior ainda está animando, o destaque "Vez"
+  // não pode acender no novo jogador — induz a falsa impressão de que ele
+  // perdeu a vez. O badge "Vez" e o aria-current só ligam quando o pousio
+  // terminou (isPawnSettling=false).
+  it('não destaca "Vez" enquanto isPawnSettling for true', () => {
+    const players = makePlayers([{}, {}]);
+    render(<PlayerList players={players} currentPlayerIndex={1} isPawnSettling={true} />);
+    expect(screen.queryByText('Vez')).not.toBeInTheDocument();
+    expect(screen.getByTestId('player-list-item-p2')).toHaveAttribute('aria-current', 'false');
+  });
+
+  it('destaca "Vez" normalmente quando isPawnSettling for false', () => {
+    const players = makePlayers([{}, {}]);
+    render(<PlayerList players={players} currentPlayerIndex={1} isPawnSettling={false} />);
+    expect(screen.getByText('Vez')).toBeInTheDocument();
+    expect(screen.getByTestId('player-list-item-p2')).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('isPawnSettling default é false (compat: chamadas antigas mantêm comportamento)', () => {
+    const players = makePlayers([{}, {}]);
+    render(<PlayerList players={players} currentPlayerIndex={1} />);
+    expect(screen.getByText('Vez')).toBeInTheDocument();
+  });
 });

@@ -458,12 +458,15 @@ export class SessionManager {
     return { started: true, votes, needed, droppedPlayerIds: dropped };
   }
 
-  renamePlayer(sessionId: string, playerId: string, name: string): void {
+  renamePlayer(sessionId: string, playerId: string, name: string, avatarId?: string): void {
     const entry = this.sessions.get(sessionId);
     if (!entry) throw new Error('SESSION_NOT_FOUND');
     const player = entry.session.players.find((p) => p.id === playerId);
     if (!player) throw new Error('PLAYER_NOT_FOUND');
     player.name = name;
+    if (avatarId !== undefined) {
+      player.avatarId = avatarId;
+    }
   }
 
   markDisconnected(sessionId: string, playerId: string): { nextPlayerId: string | null; turnAdvanced: boolean } {

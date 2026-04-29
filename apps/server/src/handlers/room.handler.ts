@@ -56,10 +56,10 @@ export function registerRoomHandler(
     }
   });
 
-  // Jogador atualizou nome+sobrenome após CharacterSelect → broadcast para todos
+  // Jogador atualizou nome+sobrenome+avatar após CharacterSelect → broadcast para todos
   socket.on(EVENTS.PLAYER_RENAME, (payload: PlayerRenamePayload) => {
     try {
-      sm.renamePlayer(payload.sessionId, payload.playerId, payload.name);
+      sm.renamePlayer(payload.sessionId, payload.playerId, payload.name, payload.avatarId);
       const session = sm.getById(payload.sessionId);
       if (session) {
         io.to(payload.sessionId).emit(EVENTS.GAME_STATE, session);

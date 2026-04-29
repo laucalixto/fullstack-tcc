@@ -4,9 +4,16 @@ interface PlayerListProps {
   players: Player[];
   currentPlayerIndex: number;
   myPlayerId?: string;
+  /**
+   * Quando `true`, o destaque "Vez" não acende mesmo se `currentPlayerIndex`
+   * já apontou para o próximo jogador — evita falsa impressão de "perdi a vez"
+   * enquanto o peão do anterior ainda está animando. O HUD só lidera o jogador
+   * atual quando o pousio (pawn:done + TURN_CHANGED) terminou.
+   */
+  isPawnSettling?: boolean;
 }
 
-export function PlayerList({ players, currentPlayerIndex, myPlayerId }: PlayerListProps) {
+export function PlayerList({ players, currentPlayerIndex, myPlayerId, isPawnSettling = false }: PlayerListProps) {
   return (
     <ul
       data-testid="player-list"
@@ -14,7 +21,7 @@ export function PlayerList({ players, currentPlayerIndex, myPlayerId }: PlayerLi
       style={{ pointerEvents: 'none' }}
     >
       {players.map((player, i) => {
-        const isActive = i === currentPlayerIndex;
+        const isActive = (i === currentPlayerIndex) && !isPawnSettling;
         const isMe     = player.id === myPlayerId;
         return (
           <li

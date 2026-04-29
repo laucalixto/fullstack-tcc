@@ -5,9 +5,10 @@ export type AssetCategory = 'tile' | 'pawn' | 'ground' | 'decoration' | 'unknown
 
 // Faixas esperadas (maior eixo do bounding box, em metros) — convenção 1 unit = 1m.
 // Fora da faixa: warning no console para o dev reexportar do Blender.
+// `pawn` aceita 0.1m–2.5m: peões de tabuleiro de 10–25cm são comuns.
 const SCALE_RANGES: Record<AssetCategory, [number, number] | null> = {
   tile:       [0.5, 2],
-  pawn:       [0.3, 2.5],
+  pawn:       [0.1, 2.5],
   ground:     [5, 50],
   decoration: [0.1, 10],
   unknown:    null,

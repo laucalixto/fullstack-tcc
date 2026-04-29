@@ -55,6 +55,13 @@ export interface Player {
   score: number;
   skipNextTurn?: boolean;
   isConnected: boolean;
+  /**
+   * Identificador do avatar escolhido pelo jogador no CharacterSelect
+   * (ex: 'operator', 'tech'). O cliente resolve a cor base e variações via
+   * `apps/client/src/three/pawnColors.ts`. Opcional para compat com fixtures
+   * antigas; o servidor preenche com `AVATARS[0].id` quando ausente.
+   */
+  avatarId?: string;
 }
 
 export interface QuizConfig {

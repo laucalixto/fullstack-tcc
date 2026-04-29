@@ -11,7 +11,10 @@ const RegisterSchema = z.object({
   email:          z.string().email(),
   industrialUnit: z.string().min(1),
   password:       z.string().min(8, 'Senha deve ter no mínimo 8 caracteres.'),
-  sessionScore:   z.number().int().nonnegative().optional(),
+  // Tiles podem subtrair pontos durante a partida — score negativo é legítimo.
+  // Sem essa flexibilização, o jogador mal posicionado recebia HTTP 400 e o
+  // client exibia "Não foi possível conectar ao servidor", mascarando o bug.
+  sessionScore:   z.number().int().optional(),
 });
 
 const LoginSchema = z.object({

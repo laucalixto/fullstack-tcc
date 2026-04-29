@@ -88,13 +88,20 @@ describe('CharacterSelectPage — PLAYER_RENAME', () => {
     });
   });
 
-  it('emite PLAYER_RENAME com nome + sobrenome ao confirmar', () => {
+  it('emite PLAYER_RENAME com nome + sobrenome + avatarId ao confirmar', () => {
     renderCharacterSelect();
-    fillAndConfirm('Alice', 'Silva');
-    expect(socket.emit).toHaveBeenCalledWith(
-      EVENTS.PLAYER_RENAME,
-      { sessionId: 'session-1', playerId: 'p1', name: 'Alice Silva' },
+    fillAndConfirm('Alice', 'Silva', 0); // 1º avatar
+    const call = vi.mocked(socket.emit).mock.calls.find(
+      ([ev]) => ev === EVENTS.PLAYER_RENAME,
     );
+    expect(call?.[1]).toMatchObject({
+      sessionId: 'session-1',
+      playerId: 'p1',
+      name: 'Alice Silva',
+    });
+    // Avatar enviado deve ser uma string (id da lista AVATARS) — não vazia
+    expect(typeof (call?.[1] as { avatarId?: unknown })?.avatarId).toBe('string');
+    expect((call?.[1] as { avatarId: string }).avatarId.length).toBeGreaterThan(0);
   });
 
   it('usa firstName + " " + lastName como nome completo', () => {

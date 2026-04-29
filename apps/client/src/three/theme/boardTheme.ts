@@ -51,6 +51,14 @@ export interface PawnThemeConfig {
   bodyMaterialName: string;
   /** Cores por índice de entrada no jogo (até 4 jogadores). */
   colorsByIndex: number[];
+  /**
+   * Override manual da altura Y aplicada sobre `tile.y`. Se omitido, o
+   * `PawnManager` usa 0.35 no modo procedural (cápsula de 70cm tocando o
+   * tile) e mede o bounding box do glTF para pousar o fundo do modelo no
+   * tile automaticamente. Útil para flutuar/afundar deliberadamente sem
+   * reexportar o `.glb`.
+   */
+  yOffset?: number;
 }
 
 export interface DiceThemeConfig {
@@ -151,9 +159,11 @@ export const DEFAULT_THEME: BoardTheme = {
     color: 0x3d2b1f,
   },
   pawn: {
+    url: '/models/pawn.glb',
     scale: 1.0,
     bodyMaterialName: 'pawn-body',
     colorsByIndex: [0xe63946, 0x457b9d, 0x2a9d8f, 0xf4a261],
+    yOffset: 0.15,
   },
   dice: {
     scale: 1.0,

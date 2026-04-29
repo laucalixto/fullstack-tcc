@@ -11,7 +11,13 @@ interface EditState {
   firstName: string;
   lastName: string;
   industrialUnit: string;
-  totalScore: number;
+  /**
+   * String durante a edição — permite estados transicionais como "" ou "-"
+   * enquanto o usuário digita um negativo. Convertido para number só no
+   * `saveEdit` antes de chamar `onSave`. Sem isso, `Number("-")` produz NaN
+   * que o React coerce para 0, impedindo a digitação direta de negativos.
+   */
+  totalScore: string;
 }
 
 export function ManagerPlayersPage({ players, onSave, isLoading }: ManagerPlayersPageProps) {
@@ -24,7 +30,7 @@ export function ManagerPlayersPage({ players, onSave, isLoading }: ManagerPlayer
         firstName: p.firstName,
         lastName: p.lastName,
         industrialUnit: p.industrialUnit,
-        totalScore: p.totalScore,
+        totalScore: String(p.totalScore),
       },
     }));
   }
@@ -34,8 +40,17 @@ export function ManagerPlayersPage({ players, onSave, isLoading }: ManagerPlayer
   }
 
   function saveEdit(playerId: string) {
-    const patch = editing[playerId];
-    if (!patch) return;
+    const draft = editing[playerId];
+    if (!draft) return;
+    // Converte totalScore (string transicional) para number no commit.
+    // String vazia ou só "-" viram 0; qualquer string parseável vira número.
+    const parsed = parseInt(draft.totalScore, 10);
+    const patch = {
+      firstName: draft.firstName,
+      lastName: draft.lastName,
+      industrialUnit: draft.industrialUnit,
+      totalScore: Number.isFinite(parsed) ? parsed : 0,
+    };
     onSave(playerId, patch);
     cancelEdit(playerId);
   }
@@ -104,9 +119,15 @@ export function ManagerPlayersPage({ players, onSave, isLoading }: ManagerPlayer
                       {isEditing ? (
                         <input
                           data-testid={`player-input-score-${p.playerId}`}
-                          type="number"
+                          // type="text" + inputMode="numeric" — type="number" coerce
+                          // strings transicionais ("-", "") para "" via input nativo,
+                          // bloqueando digitação direta de negativos. Validação real
+                          // acontece no saveEdit via parseInt.
+                          type="text"
+                          inputMode="numeric"
+                          pattern="-?\d*"
                           value={draft.totalScore}
-                          onChange={(e) => setEditing((prev) => ({ ...prev, [p.playerId]: { ...prev[p.playerId], totalScore: Number(e.target.value) } }))}
+                          onChange={(e) => setEditing((prev) => ({ ...prev, [p.playerId]: { ...prev[p.playerId], totalScore: e.target.value } }))}
                           className="w-20 border-b border-primary bg-transparent text-sm font-bold focus:outline-none px-1"
                         />
                       ) : (

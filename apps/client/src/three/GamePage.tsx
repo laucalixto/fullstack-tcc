@@ -370,6 +370,7 @@ export function GamePage() {
               players={players}
               currentPlayerIndex={currentPlayerIndex}
               myPlayerId={myPlayerId ?? undefined}
+              isPawnSettling={isPawnSettling}
             />
           </div>
         </div>

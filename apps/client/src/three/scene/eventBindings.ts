@@ -5,6 +5,7 @@ import type { PawnManager } from '../PawnManager';
 import type { CameraController } from '../camera';
 import type { DicePhysics } from '../dice/DicePhysics';
 import { DICE_ZONE } from '../dice/DicePhysics';
+import { resolvePawnColor } from '../pawnColors';
 
 export interface EventBindingsDeps {
   pawnManager: PawnManager;
@@ -32,11 +33,17 @@ export function bindGameEvents(deps: EventBindingsDeps): () => void {
   function applyPawnPositions(players: Player[], animateOnlyId: string | null = null): void {
     players.forEach((player, i) => {
       if (!knownPlayers.has(player.id)) {
-        pawnManager.addPawn(player.id, i);
+        // Cor resolvida do avatar do jogador, com variação HSL quando dois ou
+        // mais jogadores compartilham o mesmo avatar.
+        const color = resolvePawnColor(players, player.id);
+        pawnManager.addPawn(player.id, i, color);
         knownPlayers.add(player.id);
         pawnManager.movePawn(player.id, player.position);
         pawnPositions.set(player.id, player.position);
       } else {
+        // Re-resolve a cor: se um novo jogador entrou e duplicou um avatar,
+        // a variação dos jogadores existentes pode mudar.
+        pawnManager.setPawnColor(player.id, resolvePawnColor(players, player.id));
         const oldPos = pawnPositions.get(player.id) ?? player.position;
         if (oldPos !== player.position) {
           pawnPositions.set(player.id, player.position);

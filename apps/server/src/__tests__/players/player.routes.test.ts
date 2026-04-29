@@ -75,6 +75,27 @@ describe('POST /api/players/register', () => {
     expect(lb.body[0].totalScore).toBe(250);
   });
 
+  // Tiles podem subtrair pontos durante a partida, então sessionScore negativo
+  // é legítimo. O endpoint precisa aceitar para que o jogador que terminou
+  // mal posicionado consiga se cadastrar (caso contrário o client recebe 400
+  // e exibe "Não foi possível conectar ao servidor", mascarando o bug).
+  it('aceita sessionScore negativo no registro pós-partida', async () => {
+    const res = await request(app).post('/api/players/register').send({
+      firstName: 'Carlos',
+      lastName: 'Negativo',
+      email: 'carlos.neg@empresa.com',
+      industrialUnit: 'planta-z',
+      password: 'senha789!',
+      sessionScore: -15,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty('playerId');
+
+    const lb = await request(app).get('/api/leaderboard');
+    const me = lb.body.find((e: { playerId: string }) => e.playerId === res.body.playerId);
+    expect(me?.totalScore).toBe(-15);
+  });
+
   it('armazena a senha usando bcrypt (deve começar com $2[ayb]$)', async () => {
     const email = 'bcrypt-test@empresa.com';
     await request(app).post('/api/players/register').send({
